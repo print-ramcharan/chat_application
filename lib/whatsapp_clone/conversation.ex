@@ -132,8 +132,9 @@ defmodule WhatsappClone.Conversation do
     field :is_group, :boolean, default: false
     field :group_name, :string
     field :group_avatar_url, :string
-    field :created_by, :binary_id
+    # field :created_by, :binary_id
 
+    belongs_to :creator, WhatsappClone.User, foreign_key: :created_by
     has_many :conversation_members, WhatsappClone.ConversationMember, foreign_key: :conversation_id
     has_many :messages, WhatsappClone.Message, foreign_key: :conversation_id
 

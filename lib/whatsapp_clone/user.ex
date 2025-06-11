@@ -62,7 +62,7 @@ defmodule WhatsappClone.User do
     field :username, :string
     field :phone_number, :string
     field :display_name, :string
-    field :avatar_url, :string
+    field :avatar_data, :binary
     field :public_key, :string
 
     # for authentication:
@@ -77,7 +77,7 @@ defmodule WhatsappClone.User do
   """
   def registration_changeset(user, attrs) do
     user
-    |> cast(attrs, [:username, :phone_number, :display_name, :avatar_url, :public_key, :password])
+    |> cast(attrs, [:username, :phone_number, :display_name, :avatar_data, :public_key, :password])
     |> validate_required([:username, :phone_number, :display_name, :password])
     |> validate_length(:password, min: 6)
     |> unique_constraint(:phone_number)

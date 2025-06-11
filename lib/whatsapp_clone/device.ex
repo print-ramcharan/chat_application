@@ -77,7 +77,7 @@ defmodule WhatsappClone.Device do
     field :device_name, :string
     field :public_key, :string
 
-    belongs_to :user, WhatsappClone.Accounts.User, type: :binary_id
+    belongs_to :user, WhatsappClone.User, type: :binary_id
 
     timestamps(type: :utc_datetime_usec)
   end

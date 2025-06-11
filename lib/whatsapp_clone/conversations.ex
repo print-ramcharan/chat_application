@@ -3,35 +3,49 @@ defmodule WhatsappClone.Conversations do
   alias WhatsappClone.{Repo, Conversation, ConversationMember}
   alias WhatsappClone.Message
 
-  def list_user_conversations(user_id) do
-    query =
-      from c in Conversation,
-        join: cm in ConversationMember, on: cm.conversation_id == c.id,
-        where: cm.user_id == ^user_id,
-        preload: [],
-        group_by: c.id,
-        select: %{
-          id: c.id,
-          is_group: c.is_group,
-          group_name: c.group_name,
-          group_avatar_url: c.group_avatar_url,
-          created_by: c.created_by,
-          inserted_at: c.inserted_at,
-          last_message: fragment("""
-            SELECT row_to_json(row)
-            FROM (
-              SELECT m2.id, m2.sender_id, m2.encrypted_body, m2.message_type, m2.inserted_at
-              FROM messages m2
-              WHERE m2.conversation_id = ?
-              ORDER BY m2.inserted_at DESC
-              LIMIT 1
-            ) AS row
-          """, c.id)
-        }
+    def list_user_conversations(user_id) do
+      # Get ALL conversation IDs for this user first
+      conversation_ids =
+        from(cm in ConversationMember,
+          where: cm.user_id == ^user_id,
+          select: cm.conversation_id
+        )
+        |> Repo.all()
 
-    Repo.all(query)
-    |> Enum.map(&map_to_conversation_struct/1)
-  end
+      # Return early if no conversations
+      if Enum.empty?(conversation_ids) do
+        []
+      else
+        # Fetch conversations with members
+        conversations =
+          from(c in Conversation,
+            where: c.id in ^conversation_ids,
+            preload: [conversation_members: :user],
+            order_by: [desc: c.updated_at]
+          )
+          |> Repo.all()
+
+        # Fetch last messages for ALL conversations in ONE query
+        last_messages_subquery =
+          from(m in Message,
+            where: m.conversation_id in ^conversation_ids,
+            distinct: m.conversation_id,
+            order_by: [desc: m.inserted_at]
+          )
+
+        last_messages_map =
+          last_messages_subquery
+          |> Repo.all()
+          |> Enum.group_by(& &1.conversation_id)
+          |> Enum.map(fn {conv_id, [msg | _]} -> {conv_id, msg} end)
+          |> Map.new()
+
+        # Attach last messages to conversations
+        Enum.map(conversations, fn conv ->
+          Map.put(conv, :last_message, Map.get(last_messages_map, conv.id))
+        end)
+      end
+    end
 
   defp map_to_conversation_struct(map) do
     last_msg =
@@ -47,7 +61,8 @@ defmodule WhatsappClone.Conversations do
       group_avatar_url: map.group_avatar_url,
       created_by: map.created_by,
       inserted_at: map.inserted_at,
-      updated_at: map.updated_at,
+      # updated_at: map.updated_at,
+      updated_at: Map.get(map, :updated_at),
       messages: last_msg
     }
   end

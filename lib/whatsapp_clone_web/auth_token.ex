@@ -13,13 +13,27 @@
 #   end
 # end
 
-defmodule WhatsappCloneWeb.AuthToken do
-  # @secret "KnnD7jyxnhg0En/Zs4+XMXUFAVacWMV1uI+8b3EjEZNyBpdbfz9te6Z9ymLlOYz"
-   @secret Application.get_env(:whatsapp_clone, WhatsappCloneWeb.AuthToken)[:secret]
-  def verify(token) do
-    signer = Joken.Signer.create("HS256", @secret)
+# defmodule WhatsappCloneWeb.AuthToken do
+# #   # @secret "KnnD7jyxnhg0En/Zs4+XMXUFAVacWMV1uI+8b3EjEZNyBpdbfz9te6Z9ymLlOYz"
+# #    @secret Application.get_env(:whatsapp_clone, WhatsappCloneWeb.AuthToken)[:secret]
+# # signer = Joken.Signer.create("HS256", Application.fetch_env!(:joken, :default_signer))
 
-    case Joken.verify(token, signer) do
+#   def verify(token) do
+#     # signer = Joken.Signer.create("HS256", @secret)
+#       signer = Joken.Signer.create("HS256", Application.fetch_env!(:joken, :default_signer))
+
+#     case Joken.verify(token, signer) do
+#       {:ok, %{"sub" => user_id}} -> {:ok, user_id}
+#       _ -> :error
+#     end
+#   end
+# end
+
+defmodule WhatsappCloneWeb.AuthToken do
+  def verify(token) do
+    signer = Application.fetch_env!(:joken, :default_signer)
+
+    case Joken.verify_and_validate(token, signer) do
       {:ok, %{"sub" => user_id}} -> {:ok, user_id}
       _ -> :error
     end

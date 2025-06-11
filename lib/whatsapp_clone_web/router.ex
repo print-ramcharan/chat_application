@@ -88,6 +88,7 @@ defmodule WhatsappCloneWeb.Router do
     get "/users/search", UserController, :search
     get "/users/:id", UserController, :show
     get "/users/:id/conversations", ConversationController, :index
+    patch "/users/avatar", UserController, :avatar
 
     # Devices
     post "/devices", DeviceController, :create
@@ -95,10 +96,32 @@ defmodule WhatsappCloneWeb.Router do
 
     # Conversations
     post "/conversations", ConversationController, :create
+
+    post "/conversations/:id/remove_member", ConversationController, :remove_member
+    patch "/conversations/:id/add_member", ConversationController, :add_member
+
     get "/conversations", ConversationController, :list_for_current_user
+    get "/conversations/:id/members", ConversationController, :members
+    get "/conversations/:id/details", ConversationController, :details
+
     patch "/conversations/:id", ConversationController, :update
     patch "/conversations/:id/admins", ConversationController, :update_admins
-    delete "/conversations/:id", ConversationController, :delete
+    # delete "/conversations/:id", ConversationController, :delete
+    # post "/conversations/:id/remove_member", ConversationController, :remove_member
+
+    #Friendship
+
+    # get "/friendships/mutual/:other_user_id", FriendshipController, :mutual_friends
+
+    post "/friendships/send", FriendshipController, :send_request
+    post "/friendships/accept", FriendshipController, :accept_request
+    get "/friendships/pending", FriendshipController, :pending_requests
+    get "/friendships/friends", FriendshipController, :list_friends
+    get "/friendships/mutual/:user_id", FriendshipController, :mutual_friends
+    get "/friendships/discover", FriendshipController, :discover_users
+    delete "/friendships", FriendshipController, :delete_friend
+
+
 
     # Messages
     post "/conversations/:conversation_id/messages", MessageController, :create

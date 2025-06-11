@@ -28,22 +28,6 @@ defmodule WhatsappCloneWeb.ConversationController do
   Returns the newly created conversation.
   """
 
-#   def create(conn, %{
-#     "is_group" => _,
-#     "created_by" => _,
-#     "members" => _
-#   } = params) do
-# case Conversations.create_conversation(params) do
-#   {:ok, convo} ->
-#     convo = Repo.preload(convo, [:conversation_members, :messages])
-#     render(conn, WhatsappCloneWeb.ConversationView, "show.json", conversation: convo)
-
-#   {:error, changeset} ->
-#     conn
-#     |> put_status(:unprocessable_entity)
-#     |> json(%{errors: render_changeset_errors(changeset)})
-# end
-# end
 def create(conn, params) do
   case create_conversation(params) do
     {:ok, convo} ->
@@ -56,32 +40,114 @@ def create(conn, params) do
   end
 end
 
-# def create_conversation(attrs) do
-#   members = Map.get(attrs, "members", [])
-#   created_by = Map.get(attrs, "created_by")
+@doc """
+PATCH /api/conversations/:id/add_member
+Body params: %{"user_id" => <user_to_add_id>}
 
-#   # Build conversation changeset
-#   %Conversation{}
-#   |> Conversation.changeset(attrs)
-#   |> Repo.insert()
-#   |> case do
-#     {:ok, convo} ->
-#       # Insert members with admin flag
-#       member_records = Enum.map(members, fn user_id ->
-#         %{
-#           conversation_id: convo.id,
-#           user_id: user_id,
-#           joined_at: DateTime.utc_now(),
-#           is_admin: user_id == created_by
-#         }
-#       end)
+Only admins of the conversation can add new members.
+"""
+def add_member(conn, %{"id" => convo_id, "user_id" => new_user_id}) do
+  current_user_id = conn.assigns[:user_id]
 
-#       Repo.insert_all(ConversationMember, member_records)
-#       {:ok, Repo.preload(convo, [:conversation_members, :messages])}
+  is_admin? =
+    Repo.exists?(
+      from cm in ConversationMember,
+      where: cm.conversation_id == ^convo_id and cm.user_id == ^current_user_id and cm.is_admin == true
+    )
 
-#     error -> error
-#   end
-# end
+  if is_admin? do
+    # Check if user is already a member to avoid duplicates
+    already_member? =
+      Repo.exists?(
+        from cm in ConversationMember,
+        where: cm.conversation_id == ^convo_id and cm.user_id == ^new_user_id
+      )
+
+    if already_member? do
+      conn
+      |> put_status(:conflict)
+      |> json(%{error: "User is already a member"})
+    else
+      # Insert new member
+      changeset =
+        %ConversationMember{}
+        |> ConversationMember.changeset(%{
+          conversation_id: convo_id,
+          user_id: new_user_id,
+          joined_at: DateTime.utc_now(),
+          is_admin: false
+        })
+
+        case Repo.insert(changeset) do
+          {:ok, _member} ->
+            convo =
+              Conversations.get_conversation!(convo_id)
+              |> Repo.preload([
+                :messages,
+                conversation_members: [:user]   # ✅ No trailing comma here
+              ])
+
+            render(conn, WhatsappCloneWeb.ConversationView, "show.json", conversation: convo)
+
+          {:error, changeset} ->
+            conn
+            |> put_status(:unprocessable_entity)
+            |> json(%{errors: render_changeset_errors(changeset)})
+        end
+
+    end
+  else
+    conn
+    |> put_status(:forbidden)
+    |> json(%{error: "Only admins can add members"})
+  end
+end
+def remove_member(conn, %{"id" => convo_id, "user_id" => user_id_to_remove}) do
+  current_user_id = conn.assigns[:user_id]
+
+  is_admin? =
+    Repo.exists?(
+      from cm in ConversationMember,
+      where:
+        cm.conversation_id == ^convo_id and
+        cm.user_id == ^current_user_id and
+        cm.is_admin == true
+    )
+
+  if is_admin? do
+    case Repo.get_by(ConversationMember, conversation_id: convo_id, user_id: user_id_to_remove) do
+      nil ->
+        conn
+        |> put_status(:not_found)
+        |> json(%{error: "User not found in the conversation"})
+
+      member ->
+        # Prevent removing the group creator or self (optional)
+        if member.user_id == current_user_id do
+          conn
+          |> put_status(:forbidden)
+          |> json(%{error: "You can't remove yourself from the group"})
+        else
+          case Repo.delete(member) do
+            {:ok, _} ->
+              convo =
+                Conversations.get_conversation!(convo_id)
+                |> Repo.preload(conversation_members: [:user], messages: [])
+              render(conn, WhatsappCloneWeb.ConversationView, "show.json", conversation: convo)
+
+            {:error, changeset} ->
+              conn
+              |> put_status(:unprocessable_entity)
+              |> json(%{errors: render_changeset_errors(changeset)})
+          end
+        end
+    end
+  else
+    conn
+    |> put_status(:forbidden)
+    |> json(%{error: "Only admins can remove members"})
+  end
+end
 
 def create_conversation(attrs) do
   members = Map.get(attrs, "members", [])
@@ -233,7 +299,7 @@ def update_admins(conn, %{"id" => convo_id} = params) do
     )
     |> Repo.update_all(set: [is_admin: false])
 
-    convo = Conversations.get_conversation!(convo_id) |> Repo.preload([:conversation_members, :messages])
+    convo = Conversations.get_conversation!(convo_id) |> Repo.preload([conversation_members: [:user], messages: []])
 
     render(conn, WhatsappCloneWeb.ConversationView, "show.json", conversation: convo)
   else
@@ -242,6 +308,128 @@ def update_admins(conn, %{"id" => convo_id} = params) do
     |> json(%{error: "Only admins can modify admins"})
   end
 end
+
+# def members(conn, %{"id" => convo_id}) do
+#   import Ecto.Query, only: [from: 2]
+
+#   members =
+#     from(cm in ConversationMember,
+#       where: cm.conversation_id == ^convo_id,
+#       join: u in assoc(cm, :user),
+#       select: %{
+#         user_id: u.id,
+#         username: u.username,
+#         avatar_data: Base.encode64(u.avatar_data || <<>>),
+#         is_admin: cm.is_admin
+#       }
+#     )
+#     |> Repo.all()
+
+#   if members == [] do
+#     case Repo.get(Conversation, convo_id) do
+#       nil ->
+#         conn
+#         |> put_status(:not_found)
+#         |> json(%{error: "Conversation not found"})
+
+#       _ ->
+#         conn
+#         |> put_status(:ok)
+#         |> json(members) # empty list
+#     end
+#   else
+#     conn
+#     |> put_status(:ok)
+#     |> json(members)
+#   end
+# end
+
+def members(conn, %{"id" => convo_id}) do
+  import Ecto.Query, only: [from: 2]
+
+  raw_members =
+    from(cm in ConversationMember,
+      where: cm.conversation_id == ^convo_id,
+      join: u in assoc(cm, :user),
+      select: %{
+        user_id: u.id,
+        username: u.username,
+        avatar_data: u.avatar_data,
+        is_admin: cm.is_admin
+      }
+    )
+    |> Repo.all()
+
+  members =
+    Enum.map(raw_members, fn member ->
+      %{
+        user_id: member.user_id,
+        username: member.username,
+        avatar: Base.encode64(member.avatar_data || <<>>),
+        is_admin: member.is_admin
+      }
+    end)
+
+  if members == [] do
+    case Repo.get(Conversation, convo_id) do
+      nil ->
+        conn
+        |> put_status(:not_found)
+        |> json(%{error: "Conversation not found"})
+
+      _ ->
+        conn
+        |> put_status(:ok)
+        |> json([])
+    end
+  else
+    conn
+    |> put_status(:ok)
+    |> json(members)
+  end
+end
+
+
+
+def details(conn, %{"id" => id}) do
+  conversation =
+    Conversation
+    |> Repo.get(id)
+    |> Repo.preload([:creator, conversation_members: [:user]])
+
+  case conversation do
+    nil ->
+      conn
+      |> put_status(:not_found)
+      |> json(%{error: "Conversation not found"})
+
+    convo ->
+      members = Enum.map(convo.conversation_members, fn m ->
+        %{
+          id: m.user.id,
+          username: m.user.username,
+          avatar_data: Base.encode64(m.user.avatar_data || <<>>),
+          is_admin: m.is_admin
+        }
+      end)
+
+      json(conn, %{
+        id: convo.id,
+        group_name: convo.group_name,
+        group_avatar_url: convo.group_avatar_url,
+        created_by: convo.created_by,
+        created_at: convo.inserted_at,
+        creator: %{
+          id: convo.creator.id,
+          username: convo.creator.username,
+          avatar_data: Base.encode64(convo.creator.avatar_data || <<>>),
+        },
+        members: members
+      })
+  end
+end
+
+
 
 
   defp render_changeset_errors(changeset) do

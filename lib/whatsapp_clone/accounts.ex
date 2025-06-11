@@ -199,7 +199,7 @@ defmodule WhatsappClone.Accounts do
       id: u.id,
       username: u.username,
       display_name: u.display_name,
-      avatar_url: u.avatar_url
+      avatar_url: u.avatar_data
     })
     |> Repo.all()
   end
@@ -218,6 +218,51 @@ defmodule WhatsappClone.Accounts do
     |> Device.changeset(attrs)
     |> Repo.insert(on_conflict: :replace_all, conflict_target: [:id])
   end
+
+  def get_user!(id), do: Repo.get!(User, id)
+
+
+  # def update_avatar(user_id, avatar_url) do
+  #   user = get_user!(user_id)
+
+  #   user
+  #   |> Ecto.Changeset.change(%{avatar_url: avatar_url})
+  #   |> WhatsappClone.Repo.update()
+  # end
+  # def update_avatar(user_id, base64_image) do
+  #   user = get_user!(user_id)
+
+  #   user
+  #   |> Ecto.Changeset.change(%{avatar_data: base64_image})
+  #   |> Repo.update()
+  # end
+
+  # def update_avatar(user_id, base64_avatar) do
+  #   with {:ok, user} <- get_user(user_id),
+  #        {:ok, binary_data} <- Base.decode64(base64_avatar) do
+  #     user
+  #     |> Ecto.Changeset.change(avatar_data: binary_data)
+  #     |> Repo.update()
+  #   else
+  #     _ -> {:error, :invalid_avatar_data}
+  #   end
+  # end
+  def update_avatar(user_id, base64_avatar) do
+    with %User{} = user <- get_user(user_id),
+         {:ok, binary_data} <- Base.decode64(base64_avatar) do
+      user
+      |> Ecto.Changeset.change(avatar_data: binary_data)
+      |> Repo.update()
+    else
+      nil -> {:error, :user_not_found}
+      :error -> {:error, :invalid_avatar_data}
+    end
+  end
+
+  # defp get_user(id), do: Repo.get(User, id)
+
+
+
 
   def delete_device(user_id, device_id) do
     case Repo.get(Device, device_id) do

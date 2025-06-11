@@ -109,7 +109,8 @@ defmodule WhatsappClone.MessageStatus do
     field :status, :string
     field :status_ts, :utc_datetime_usec
 
-    timestamps(type: :utc_datetime)
+    timestamps(type: :naive_datetime)
+
   end
 
   @doc false

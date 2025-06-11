@@ -125,7 +125,8 @@ defmodule WhatsappCloneWeb.AuthController do
         "username" => _,
         "phone_number" => _,
         "display_name" => _,
-        "password" => _
+        "password" => _,
+        # "avatar_url" => _
       } = params) do
     case Accounts.register_user(params) do
       {:ok, user} ->
@@ -149,6 +150,9 @@ defmodule WhatsappCloneWeb.AuthController do
   @doc """
   POST /api/login
   """
+  defp encode_avatar(nil), do: nil
+  defp encode_avatar(data), do: "data:image/png;base64," <> Base.encode64(data)
+
   def login(conn, %{"phone_number" => phone_number, "password" => password}) do
     case Accounts.authenticate_user(phone_number, password) do
       {:ok, user} ->
@@ -159,7 +163,8 @@ defmodule WhatsappCloneWeb.AuthController do
             id: user.id,
             username: user.username,
             phone_number: user.phone_number,
-            display_name: user.display_name
+            display_name: user.display_name,
+            avatar_url: encode_avatar(user.avatar_data)
           },
           token: token
         })

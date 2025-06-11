@@ -18,7 +18,8 @@ defmodule WhatsappClone.Application do
       # {WhatsappClone.Worker, arg},
       # Start to serve requests, typically the last entry
       WhatsappCloneWeb.Endpoint,
-      WhatsappCloneWeb.Presence
+      WhatsappCloneWeb.Presence,
+      WhatsappClone.SocialGraph,
     ]
 
     # See https://hexdocs.pm/elixir/Supervisor.html
