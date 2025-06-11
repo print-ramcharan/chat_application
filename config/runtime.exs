@@ -22,13 +22,9 @@ end
 
 if config_env() == :prod do
   database_url =
-    System.get_env("DATABASE_URL") ||
-      raise """
-      environment variable DATABASE_URL is missing.
-      For example: ecto://USER:PASS@HOST/DATABASE
-      """
+    System.get_env("DATABASE_URL") || "postgresql://whatsapp_clone_dev_user:ZQLHqHtfVVs9X8ESJPGUiRrvWmDrJiT6@dpg-d14ubjvdiees73ecuqu0-a/whatsapp_clone_dev"
 
-  maybe_ipv6 = if System.get_env("ECTO_IPV6") in ~w(true 1), do: [:inet6], else: []
+       maybe_ipv6 = if System.get_env("ECTO_IPV6") in ~w(true 1), do: [:inet6], else: []
 
   config :whatsapp_clone, WhatsappClone.Repo,
     # ssl: true,
