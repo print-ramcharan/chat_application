@@ -246,7 +246,8 @@ defmodule WhatsappClone.SocialGraph do
 
   def friends_of(user_id), do: Graph.neighbors(get_graph(), user_id)
 
-  def connected?(u1, u2), do: Graph.reachable?(get_graph(), u1, u2)
+  def connected?(u1, u2), do: u2 in Graph.reachable?(get_graph(), u1)
+
 
   def path(u1, u2), do: Graph.dijkstra(get_graph(), u1, u2)
 
