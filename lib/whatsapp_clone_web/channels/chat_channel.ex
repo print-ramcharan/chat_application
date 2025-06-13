@@ -368,20 +368,24 @@ defmodule WhatsappCloneWeb.ChatChannel do
 
   #   {:noreply, socket}
   # end
-  handle_in("update_message_status", %{
-    "message_id" => mid,
-    "user_id" => uid,
+  def handle_in("update_message_status", %{
+    "message_id" => message_id,
+    "user_id" => user_id,
     "status" => status,
-    "status_ts" => ts
+    "status_ts" => status_ts
   }, socket) do
-    update_status_for_user(message_id: mid, user_id: uid, status: status, status_ts: ts)
-    broadcast!(socket, "message_status_update", %{
-      message_id: mid,
-      user_id: uid,
-      status: status
-    })
-  end
+# Update DB or forward to GenServer here
+WhatsappClone.Messages.update_message_status(message_id, user_id, status, status_ts)
 
+broadcast!(socket, "message_status_update", %{
+  "message_id" => message_id,
+  "user_id" => user_id,
+  "status" => status
+})
+
+{:noreply, socket}
+end
+end
 
   def handle_info(:after_join, socket) do
     user_id = socket.assigns.user_id
