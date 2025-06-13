@@ -356,6 +356,33 @@ defmodule WhatsappCloneWeb.ChatChannel do
     end
   end
 
+  # def handle_in("update_message_status", %{"message_id" => message_id, "status" => status}, socket) do
+  #   user_id = socket.assigns.user_id
+
+  #   update_message_status(message_id, user_id, status)
+  #   broadcast!(socket, "message_status_update", %{
+  #     message_id: message_id,
+  #     user_id: user_id,
+  #     status: status
+  #   })
+
+  #   {:noreply, socket}
+  # end
+  handle_in("update_message_status", %{
+    "message_id" => mid,
+    "user_id" => uid,
+    "status" => status,
+    "status_ts" => ts
+  }, socket) do
+    update_status_for_user(message_id: mid, user_id: uid, status: status, status_ts: ts)
+    broadcast!(socket, "message_status_update", %{
+      message_id: mid,
+      user_id: uid,
+      status: status
+    })
+  end
+
+
   def handle_info(:after_join, socket) do
     user_id = socket.assigns.user_id
     conversation_id = socket.assigns.conversation_id
@@ -376,51 +403,6 @@ defmodule WhatsappCloneWeb.ChatChannel do
     broadcast_from!(socket, "user_typing", %{user_id: socket.assigns.user_id})
     {:noreply, socket}
   end
-
-  @doc """
-  Handle inbound "send_message" event:
-
-    %{
-      "encrypted_body" => "...",
-      "message_type"   => "text" | "image" | ...
-    }
-
-  Broadcasts "new_message" to "chat:<conversation_id>" on success.
-  """
-  # def handle_in("send_message", %{"encrypted_body" => body, "message_type" => type}, socket) do
-  #   user_id = socket.assigns.user_id
-  #   conversation_id = socket.assigns.conversation_id
-
-  #   attrs = %{
-  #     "sender_id" => user_id,
-  #     "conversation_id" => conversation_id,
-  #     "encrypted_body" => body,
-  #     "message_type" => type
-  #   }
-
-  #   case %Message{} |> Message.changeset(attrs) |> Repo.insert() do
-  #     {:ok, message} ->
-  #       %MessageStatus{}
-  #       |> MessageStatus.changeset(%{"message_id" => message.id, "user_id" => user_id, "status" => "sent"})
-  #       |> Repo.insert()
-
-  #       payload = %{
-  #         id: message.id,
-  #         sender_id: message.sender_id,
-  #         encrypted_body: message.encrypted_body,
-  #         message_type: message.message_type,
-  #         inserted_at: message.inserted_at,
-  #         statuses: statuses
-  #       }
-
-  #       broadcast!(socket, "new_message", payload)
-  #       {:reply, {:ok, payload}, socket}
-
-  #     {:error, changeset} ->
-  #       {:reply, {:error, %{errors: Ecto.Changeset.traverse_errors(changeset, & &1)}}, socket}
-  #   end
-  # end
-
 
   def handle_in("send_message", %{"encrypted_body" => body, "message_type" => type}, socket) do
     require Logger
