@@ -58,6 +58,8 @@ defmodule WhatsappClone.User do
 
   @primary_key {:id, :binary_id, autogenerate: true}
   @foreign_key_type :binary_id
+
+  @derive {Jason.Encoder, only: [:id, :display_name, :avatar_data, :username, :phone_number]}
   schema "users" do
     field :username, :string
     field :phone_number, :string

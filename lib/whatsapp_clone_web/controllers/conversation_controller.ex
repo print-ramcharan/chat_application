@@ -28,9 +28,66 @@ defmodule WhatsappCloneWeb.ConversationController do
   Returns the newly created conversation.
   """
 
+# def create(conn, params) do
+
+#   case create_conversation(params) do
+#     {:ok, convo} ->
+#       render(conn, WhatsappCloneWeb.ConversationView, "show.json", conversation: convo)
+
+#     {:error, changeset} ->
+#       conn
+#       |> put_status(:unprocessable_entity)
+#       |> json(%{errors: render_changeset_errors(changeset)})
+#   end
+# end
+# def create(conn, params) do
+#   case create_conversation(params) do
+#     {:ok, convo} ->
+#       convo =
+#         WhatsappClone.Repo.preload(convo, [
+#           conversation_members: [:user],
+#           messages: []
+#         ])
+
+#       render(conn, WhatsappCloneWeb.ConversationView, "show.json", conversation: convo)
+
+#     {:error, changeset} ->
+#       conn
+#       |> put_status(:unprocessable_entity)
+#       |> json(%{errors: render_changeset_errors(changeset)})
+#   end
+# end
+
+def create(conn, %{"members" => member_ids, "is_group" => false} = params) when length(member_ids) == 2 do
+  case WhatsappClone.Conversations.get_one_on_one_conversation(member_ids) do
+    nil ->
+      do_create_conversation(conn, params)
+
+    conversation ->
+      # Return existing convo if already present
+      convo = WhatsappClone.Repo.preload(conversation, [
+        conversation_members: [:user],
+        messages: []
+      ])
+
+      render(conn, WhatsappCloneWeb.ConversationView, "show.json", conversation: convo)
+  end
+end
+
+# Fallback for group or invalid cases
 def create(conn, params) do
+  do_create_conversation(conn, params)
+end
+
+defp do_create_conversation(conn, params) do
   case create_conversation(params) do
     {:ok, convo} ->
+      convo =
+        WhatsappClone.Repo.preload(convo, [
+          conversation_members: [:user],
+          messages: []
+        ])
+
       render(conn, WhatsappCloneWeb.ConversationView, "show.json", conversation: convo)
 
     {:error, changeset} ->
@@ -39,6 +96,7 @@ def create(conn, params) do
       |> json(%{errors: render_changeset_errors(changeset)})
   end
 end
+
 
 @doc """
 PATCH /api/conversations/:id/add_member

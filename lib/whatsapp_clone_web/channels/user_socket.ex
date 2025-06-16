@@ -8,6 +8,8 @@ defmodule WhatsappCloneWeb.UserSocket do
   channel "graph_updates:*", WhatsappCloneWeb.SocialGraphChannel
 
 
+  channel "user:*", WhatsappCloneWeb.UserChannel
+
   # def connect(%{"token" => token}, socket, _connect_info) do
   #   case WhatsappClone.Auth.verify_token(token) do
   #     {:ok, user_id} ->

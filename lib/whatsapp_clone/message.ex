@@ -129,6 +129,7 @@ defmodule WhatsappClone.Message do
   schema "messages" do
     field :encrypted_body, :string
     field :message_type, :string
+    field :client_ref, :string
 
     belongs_to :sender, WhatsappClone.User, foreign_key: :sender_id
     belongs_to :conversation, WhatsappClone.Conversation
@@ -142,7 +143,8 @@ defmodule WhatsappClone.Message do
   @doc false
   def changeset(message, attrs) do
     message
-    |> cast(attrs, [:encrypted_body, :message_type, :sender_id, :conversation_id])
+    |> cast(attrs, [:encrypted_body, :message_type, :sender_id, :conversation_id, :client_ref])
     |> validate_required([:encrypted_body, :message_type, :sender_id, :conversation_id])
+    |> unique_constraint(:client_ref)
   end
 end

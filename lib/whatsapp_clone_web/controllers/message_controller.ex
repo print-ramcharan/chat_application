@@ -710,6 +710,12 @@ defmodule WhatsappCloneWeb.MessageController do
 
   def index(conn, %{"conversation_id" => conversation_id}) do
     messages = Messaging.list_messages(conversation_id)
-    json(conn, %{messages: messages})
+
+    IO.inspect(messages, label: "Messages being returned")
+
+    # json(conn, %{messages: messages})
+    render(conn, WhatsappCloneWeb.MessageView, "index.json", messages: messages)
+
   end
+
 end

@@ -535,31 +535,390 @@
 # end
 
 
+# defmodule WhatsappCloneWeb.ChatChannel do
+#   use Phoenix.Channel
+#   import Ecto.Query
+
+#   alias WhatsappClone.{
+#     Repo,
+#     Message,
+#     MessageStatus,
+#     ConversationMember,
+#     Messages
+#   }
+
+#   alias WhatsappCloneWeb.Presence
+
+#   @doc """
+#   Clients join topic "chat:<conversation_id>"
+#   """
+#   def join("chat:" <> conversation_id, _params, socket) do
+#     user_id = socket.assigns.user_id
+
+#     case Repo.get_by(ConversationMember, conversation_id: conversation_id, user_id: user_id) do
+#       nil ->
+#         {:error, %{reason: "unauthorized"}}
+
+#       _member ->
+#         socket = assign(socket, :conversation_id, conversation_id)
+#         send(self(), :after_join)
+#         {:ok, socket}
+#     end
+#   end
+
+#   def handle_info(:after_join, socket) do
+#     user_id = socket.assigns.user_id
+#     conversation_id = socket.assigns.conversation_id
+
+#     Presence.track(
+#       self(),
+#       "chat:#{conversation_id}",
+#       user_id,
+#       %{online_at: inspect(System.system_time(:second))}
+#     )
+
+#     push(socket, "presence_state", Presence.list("chat:#{conversation_id}"))
+#     {:noreply, socket}
+#   end
+
+#   def handle_in("user_typing", _payload, socket) do
+#     broadcast_from!(socket, "user_typing", %{user_id: socket.assigns.user_id})
+#     {:noreply, socket}
+#   end
+
+#   def handle_in("send_message", %{"encrypted_body" => body, "message_type" => type}, socket) do
+#     require Logger
+
+#     user_id = socket.assigns.user_id
+#     conversation_id = socket.assigns.conversation_id
+
+#     Logger.debug("✅ handle_in(send_message) called")
+#     Logger.debug("Socket assigns: #{inspect(socket.assigns)}")
+#     Logger.debug("Payload: body=#{body}, type=#{type}")
+
+#     attrs = %{
+#       "sender_id" => user_id,
+#       "conversation_id" => conversation_id,
+#       "encrypted_body" => body,
+#       "message_type" => type
+#     }
+
+#     case %Message{} |> Message.changeset(attrs) |> Repo.insert() do
+#       {:ok, message} ->
+#         naive_timestamp =
+#           DateTime.utc_now()
+#           |> DateTime.to_naive()
+#           |> NaiveDateTime.truncate(:second)
+
+#         utc_timestamp =
+#           DateTime.utc_now()
+#           |> DateTime.truncate(:microsecond)
+
+#         member_ids =
+#           Repo.all(
+#             from cm in WhatsappClone.ConversationMember,
+#             where: cm.conversation_id == ^conversation_id,
+#             select: cm.user_id
+#           )
+
+#         connected_ids = Presence.list("chat:#{conversation_id}") |> Map.keys()
+
+#         statuses =
+#           Enum.map(member_ids, fn id ->
+#             status =
+#               cond do
+#                 id == user_id -> "sent"
+#                 id in connected_ids -> "read"
+#                 true -> "pending"
+#               end
+
+#             %{
+#               message_id: message.id,
+#               user_id: id,
+#               status: status,
+#               status_ts: utc_timestamp,
+#               inserted_at: naive_timestamp,
+#               updated_at: naive_timestamp
+#             }
+#           end)
+
+#         Repo.insert_all(MessageStatus, statuses)
+
+#         payload = %{
+#           id: message.id,
+#           sender_id: message.sender_id,
+#           encrypted_body: message.encrypted_body,
+#           message_type: message.message_type,
+#           inserted_at: message.inserted_at,
+#           statuses: statuses
+#         }
+
+#         # broadcast!(socket, "new_message", payload)
+#         # {:reply, {:ok, payload}, socket}
+
+
+#         # Broadcast to users in this chat
+#         broadcast!(socket, "new_message", payload)
+
+#         # ALSO broadcast to each user (excluding sender) via user:<user_id> channel
+#         Enum.each(member_ids, fn id ->
+#           if id != user_id do
+#             WhatsappCloneWeb.Endpoint.broadcast("user:#{id}", "new_message_notification", %{
+#               conversation_id: conversation_id,
+#               message_id: message.id,
+#               sender_id: user_id,
+#               message_preview: body,
+#               message_type: type,
+#               timestamp: message.inserted_at
+#             })
+#           end
+#         end)
+
+#         {:reply, {:ok, payload}, socket}
+
+#       {:error, changeset} ->
+#         Logger.error("Failed to insert message: #{inspect(changeset.errors)}")
+
+#         {:reply,
+#          {:error,
+#           %{errors: Ecto.Changeset.traverse_errors(changeset, & &1)}},
+#          socket}
+#     end
+#   end
+
+#   def handle_in("update_message_status", %{
+#         "message_id" => message_id,
+#         "user_id" => user_id,
+#         "status" => status,
+#         "status_ts" => status_ts
+#       }, socket) do
+#     # Forward to your Messages context (expected to handle DB logic)
+#     Messages.update_message_status(message_id, user_id, status, status_ts)
+
+#     broadcast!(socket, "message_status_update", %{
+#       message_id: message_id,
+#       user_id: user_id,
+#       status: status
+#     })
+
+#     {:noreply, socket}
+#   end
+
+#   def handle_in("message_delivered", %{"message_id" => message_id}, socket) do
+#     user_id = socket.assigns.user_id
+
+#     update_message_status(message_id, user_id, "delivered")
+
+#     broadcast!(socket, "message_status_update", %{
+#       message_id: message_id,
+#       user_id: user_id,
+#       status: "delivered"
+#     })
+
+#     {:noreply, socket}
+#   end
+
+#   def handle_in("message_read", %{"message_id" => message_id}, socket) do
+#     user_id = socket.assigns.user_id
+
+#     update_message_status(message_id, user_id, "read")
+
+#     broadcast!(socket, "message_status_update", %{
+#       message_id: message_id,
+#       user_id: user_id,
+#       status: "read"
+#     })
+
+#     {:noreply, socket}
+#   end
+
+#   defp update_message_status(message_id, user_id, new_status) do
+#     existing = Repo.get_by(MessageStatus, message_id: message_id, user_id: user_id)
+
+#     cond do
+#       existing == nil ->
+#         %MessageStatus{}
+#         |> MessageStatus.changeset(%{
+#           "message_id" => message_id,
+#           "user_id" => user_id,
+#           "status" => new_status
+#         })
+#         |> Repo.insert()
+
+#       status_value(new_status) > status_value(existing.status) ->
+#         existing
+#         |> MessageStatus.changeset(%{"status" => new_status})
+#         |> Repo.update()
+
+#       true ->
+#         {:ok, existing}
+#     end
+#   end
+
+#   defp status_value("sent"), do: 1
+#   defp status_value("delivered"), do: 2
+#   defp status_value("read"), do: 3
+#   defp status_value(_), do: 0
+# end
+
+# extra code here
+
+ # def handle_in("send_message", %{"encrypted_body" => body, "message_type" => type}, socket) do
+  #   user_id = socket.assigns.user_id
+  #   conversation_id = socket.assigns.conversation_id
+
+  #   attrs = %{
+  #     "sender_id" => user_id,
+  #     "conversation_id" => conversation_id,
+  #     "encrypted_body" => body,
+  #     "message_type" => type
+  #   }
+
+  #   case %Message{} |> Message.changeset(attrs) |> Repo.insert() do
+  #     {:ok, message} ->
+  #       timestamp = DateTime.utc_now() |> DateTime.truncate(:microsecond)
+  #       naive = DateTime.to_naive(timestamp)
+
+  #       member_ids =
+  #         Repo.all(from cm in ConversationMember,
+  #                  where: cm.conversation_id == ^conversation_id,
+  #                  select: cm.user_id)
+
+  #       online_ids = Presence.list("chat:#{conversation_id}") |> Map.keys()
+
+  #       statuses = Enum.map(member_ids, fn id ->
+  #         %{
+  #           message_id: message.id,
+  #           user_id: id,
+  #           status: status_for(id, user_id, online_ids),
+  #           status_ts: timestamp,
+  #           inserted_at: naive,
+  #           updated_at: naive
+  #         }
+  #       end)
+
+  #       Repo.insert_all(MessageStatus, statuses)
+
+  #       payload = %{
+  #         id: message.id,
+  #         sender_id: user_id,
+  #         encrypted_body: body,
+  #         message_type: type,
+  #         inserted_at: message.inserted_at,
+  #         statuses: statuses
+  #       }
+
+  #       broadcast!(socket, "new_message", payload)
+
+  #       # Push real-time notification to each user (except sender)
+  #       Enum.each(member_ids, fn id ->
+  #         if id != user_id do
+  #           Endpoint.broadcast("user:#{id}", "new_message", %{
+  #             conversation_id: conversation_id,
+  #             message_id: message.id,
+  #             encrypted_body: body,
+  #             message_type: type,
+  #             sender_id: user_id,
+  #             inserted_at: message.inserted_at
+  #           })
+  #         end
+  #       end)
+
+  #       {:reply, {:ok, payload}, socket}
+
+  #     {:error, changeset} ->
+  #       {:reply, {:error, %{errors: format_errors(changeset)}}, socket}
+  #   end
+  # end
+
+  # def handle_in("send_message", %{"encrypted_body" => body, "message_type" => type}, socket) do
+  #   with {:ok, user_id} <- fetch_assign(socket, :user_id),
+  #        {:ok, conversation_id} <- fetch_assign(socket, :conversation_id) do
+
+  #     attrs = %{
+  #       "sender_id" => user_id,
+  #       "conversation_id" => conversation_id,
+  #       "encrypted_body" => body,
+  #       "message_type" => type
+  #     }
+
+  #     case %Message{} |> Message.changeset(attrs) |> Repo.insert() do
+  #       {:ok, message} ->
+  #         timestamp = DateTime.utc_now() |> DateTime.truncate(:microsecond)
+  #         naive = DateTime.to_naive(timestamp)
+
+  #         member_ids =
+  #           Repo.all(from cm in ConversationMember,
+  #                    where: cm.conversation_id == ^conversation_id,
+  #                    select: cm.user_id)
+
+  #         online_ids = Presence.list("chat:#{conversation_id}") |> Map.keys()
+
+  #         statuses = Enum.map(member_ids, fn id ->
+  #           %{
+  #             message_id: message.id,
+  #             user_id: id,
+  #             status: status_for(id, user_id, online_ids),
+  #             status_ts: timestamp,
+  #             inserted_at: naive,
+  #             updated_at: naive
+  #           }
+  #         end)
+
+  #         Repo.insert_all(MessageStatus, statuses)
+
+  #         payload = %{
+  #           id: message.id,
+  #           sender_id: user_id,
+  #           encrypted_body: body,
+  #           message_type: type,
+  #           inserted_at: message.inserted_at,
+  #           statuses: statuses
+  #         }
+
+  #         broadcast!(socket, "new_message", payload)
+
+  #         Enum.each(member_ids, fn id ->
+  #           if id != user_id do
+  #             Endpoint.broadcast("user:#{id}", "new_message", %{
+  #               conversation_id: conversation_id,
+  #               message_id: message.id,
+  #               encrypted_body: body,
+  #               message_type: type,
+  #               sender_id: user_id,
+  #               inserted_at: message.inserted_at
+  #             })
+  #           end
+  #         end)
+
+  #         {:reply, {:ok, payload}, socket}
+
+  #       {:error, changeset} ->
+  #         {:reply, {:error, %{errors: format_errors(changeset)}}, socket}
+  #     end
+  #   else
+  #     _ -> {:reply, {:error, %{reason: "Missing user or conversation context"}}, socket}
+  #   end
+  # end
+
+
 defmodule WhatsappCloneWeb.ChatChannel do
   use Phoenix.Channel
   import Ecto.Query
+  alias WhatsappClone.{Repo, Message, MessageStatus, ConversationMember, Messages}
+  alias WhatsappCloneWeb.{Endpoint, Presence}
+  alias WhatsappClone.User
+  require Logger
 
-  alias WhatsappClone.{
-    Repo,
-    Message,
-    MessageStatus,
-    ConversationMember,
-    Messages
-  }
 
-  alias WhatsappCloneWeb.Presence
 
-  @doc """
-  Clients join topic "chat:<conversation_id>"
-  """
+  # Clients join topic: "chat:<conversation_id>"
   def join("chat:" <> conversation_id, _params, socket) do
     user_id = socket.assigns.user_id
 
     case Repo.get_by(ConversationMember, conversation_id: conversation_id, user_id: user_id) do
-      nil ->
-        {:error, %{reason: "unauthorized"}}
-
-      _member ->
+      nil -> {:error, %{reason: "unauthorized"}}
+      _ ->
         socket = assign(socket, :conversation_id, conversation_id)
         send(self(), :after_join)
         {:ok, socket}
@@ -570,101 +929,148 @@ defmodule WhatsappCloneWeb.ChatChannel do
     user_id = socket.assigns.user_id
     conversation_id = socket.assigns.conversation_id
 
-    Presence.track(
-      self(),
-      "chat:#{conversation_id}",
-      user_id,
-      %{online_at: inspect(System.system_time(:second))}
-    )
+    Presence.track(self(), "chat:#{conversation_id}", user_id, %{
+      online_at: inspect(System.system_time(:second))
+    })
 
     push(socket, "presence_state", Presence.list("chat:#{conversation_id}"))
     {:noreply, socket}
   end
+  def handle_in("sync_presence", _params, socket) do
+    conversation_id = socket.assigns.conversation_id
+    push(socket, "presence_state", Presence.list("chat:#{conversation_id}"))
+    {:noreply, socket}
+  end
+
 
   def handle_in("user_typing", _payload, socket) do
     broadcast_from!(socket, "user_typing", %{user_id: socket.assigns.user_id})
     {:noreply, socket}
   end
 
-  def handle_in("send_message", %{"encrypted_body" => body, "message_type" => type}, socket) do
-    require Logger
+def handle_in("heartbeat", _payload, socket) do
+  {:noreply, socket}
+end
 
-    user_id = socket.assigns.user_id
-    conversation_id = socket.assigns.conversation_id
 
-    Logger.debug("✅ handle_in(send_message) called")
-    Logger.debug("Socket assigns: #{inspect(socket.assigns)}")
-    Logger.debug("Payload: body=#{body}, type=#{type}")
+def handle_in("send_message", %{"encrypted_body" => body, "message_type" => type, "client_ref" => client_ref}, socket) do
+  user_id = socket.assigns.user_id
+  conversation_id = socket.assigns.conversation_id
 
-    attrs = %{
-      "sender_id" => user_id,
-      "conversation_id" => conversation_id,
-      "encrypted_body" => body,
-      "message_type" => type
-    }
+  # WhatsappCloneWeb.DebugPresence.log_all_user_presences()
 
-    case %Message{} |> Message.changeset(attrs) |> Repo.insert() do
-      {:ok, message} ->
-        naive_timestamp =
-          DateTime.utc_now()
-          |> DateTime.to_naive()
-          |> NaiveDateTime.truncate(:second)
+  attrs = %{
+    "sender_id" => user_id,
+    "conversation_id" => conversation_id,
+    "encrypted_body" => body,
+    "message_type" => type,
+    "client_ref" => client_ref
+  }
 
-        utc_timestamp =
-          DateTime.utc_now()
-          |> DateTime.truncate(:microsecond)
+  case %Message{} |> Message.changeset(attrs) |> Repo.insert() do
+    {:ok, message} ->
+      timestamp = DateTime.utc_now() |> DateTime.truncate(:microsecond)
+      naive = DateTime.to_naive(timestamp) |> NaiveDateTime.truncate(:second)
 
-        member_ids =
-          Repo.all(
-            from cm in WhatsappClone.ConversationMember,
-            where: cm.conversation_id == ^conversation_id,
-            select: cm.user_id
-          )
+      member_ids =
+        Repo.all(from cm in ConversationMember,
+                 where: cm.conversation_id == ^conversation_id,
+                 select: cm.user_id)
 
-        connected_ids = Presence.list("chat:#{conversation_id}") |> Map.keys()
+      online_ids = Presence.list("chat:#{conversation_id}") |> Map.keys()
 
-        statuses =
-          Enum.map(member_ids, fn id ->
-            status =
-              cond do
-                id == user_id -> "sent"
-                id in connected_ids -> "read"
-                true -> "pending"
-              end
-
-            %{
-              message_id: message.id,
-              user_id: id,
-              status: status,
-              status_ts: utc_timestamp,
-              inserted_at: naive_timestamp,
-              updated_at: naive_timestamp
-            }
-          end)
-
-        Repo.insert_all(MessageStatus, statuses)
-
-        payload = %{
-          id: message.id,
-          sender_id: message.sender_id,
-          encrypted_body: message.encrypted_body,
-          message_type: message.message_type,
-          inserted_at: message.inserted_at,
-          statuses: statuses
+      statuses = Enum.map(member_ids, fn id ->
+        %{
+          message_id: message.id,
+          user_id: id,
+          status: status_for(id, user_id, online_ids),
+          status_ts: timestamp,
+          inserted_at: naive,
+          updated_at: naive
         }
+      end)
 
-        broadcast!(socket, "new_message", payload)
-        {:reply, {:ok, payload}, socket}
+      Repo.insert_all(MessageStatus, statuses)
 
-      {:error, changeset} ->
-        Logger.error("Failed to insert message: #{inspect(changeset.errors)}")
+      # Fetch sender info
+      sender_user =
+        Repo.one(
+          from u in WhatsappClone.User,
+          where: u.id == ^user_id,
+          select: %{
+            id: u.id,
+            display_name: u.display_name,
+            avatar_data: fragment("encode(?, 'base64')", u.avatar_data)
+          }
+        )
 
-        {:reply,
-         {:error,
-          %{errors: Ecto.Changeset.traverse_errors(changeset, & &1)}},
-         socket}
+      # Broadcast minimal message + sender info to all chat participants
+      broadcast_payload = %{
+        id: message.id,
+        sender_id: user_id,
+        sender_display_name: sender_user.display_name,
+        sender_avatar_data: sender_user.avatar_data,
+        encrypted_body: body,
+        message_type: type,
+        inserted_at: message.inserted_at,
+        client_ref: client_ref
+      }
+
+      # Logger.debug(">>> Broadcasting: #{inspect(broadcast_payload)}")
+# broadcast!(socket, "new_message", broadcast_payload)
+
+push(socket, "new_message", broadcast_payload)
+broadcast_from!(socket, "new_message", broadcast_payload)
+      # broadcast!(socket, "new_message", broadcast_payload)
+
+      # Push background update to other members via user:* channel
+      Enum.each(member_ids, fn id ->
+        if id != user_id do
+          Endpoint.broadcast("user:#{id}", "new_message", %{
+            conversation_id: conversation_id,
+            message_id: message.id,
+            encrypted_body: body,
+            message_type: type,
+            sender_id: user_id,
+            inserted_at: message.inserted_at,
+            client_ref: client_ref
+          })
+        end
+      end)
+
+      # Fetch all user info for statuses
+      users =
+        Repo.all(
+          from u in WhatsappClone.User,
+          where: u.id in ^member_ids,
+          select: %{
+            id: u.id,
+            display_name: u.display_name,
+            avatar_data: fragment("encode(?, 'base64')", u.avatar_data)
+          }
+        )
+
+      user_map = Map.new(users, fn u -> {u.id, u} end)
+
+      statuses_with_user =
+        Enum.map(statuses, fn s ->
+          Map.merge(s, Map.get(user_map, s.user_id) || %{})
+        end)
+
+      {:reply, {:ok, %{message: broadcast_payload, statuses: statuses_with_user}}, socket}
+
+    {:error, changeset} ->
+      {:reply, {:error, %{errors: format_errors(changeset)}}, socket}
+  end
+end
+
+  defp fetch_assign(socket, key) do
+    case Map.fetch(socket.assigns, key) do
+      :error -> {:error, :missing}
+      ok -> ok
     end
   end
+
 
   def handle_in("update_message_status", %{
         "message_id" => message_id,
@@ -672,8 +1078,7 @@ defmodule WhatsappCloneWeb.ChatChannel do
         "status" => status,
         "status_ts" => status_ts
       }, socket) do
-    # Forward to your Messages context (expected to handle DB logic)
-    Messages.update_message_status(message_id, user_id, status, status_ts)
+    WhatsappClone.Messaging.update_message_status(message_id, user_id, status, status_ts)
 
     broadcast!(socket, "message_status_update", %{
       message_id: message_id,
@@ -685,13 +1090,11 @@ defmodule WhatsappCloneWeb.ChatChannel do
   end
 
   def handle_in("message_delivered", %{"message_id" => message_id}, socket) do
-    user_id = socket.assigns.user_id
-
-    update_message_status(message_id, user_id, "delivered")
+    update_message_status(message_id, socket.assigns.user_id, "delivered")
 
     broadcast!(socket, "message_status_update", %{
       message_id: message_id,
-      user_id: user_id,
+      user_id: socket.assigns.user_id,
       status: "delivered"
     })
 
@@ -699,18 +1102,82 @@ defmodule WhatsappCloneWeb.ChatChannel do
   end
 
   def handle_in("message_read", %{"message_id" => message_id}, socket) do
-    user_id = socket.assigns.user_id
-
-    update_message_status(message_id, user_id, "read")
+    update_message_status(message_id, socket.assigns.user_id, "read")
 
     broadcast!(socket, "message_status_update", %{
       message_id: message_id,
-      user_id: user_id,
+      user_id: socket.assigns.user_id,
       status: "read"
     })
 
     {:noreply, socket}
   end
+
+  # defp status_for(id, sender_id, online_ids) do
+  #   cond do
+  #     id == sender_id -> "sent"
+  #     id in online_ids -> "read"
+  #     true -> "pending"
+  #   end
+  # end
+
+  # defp status_for(id, sender_id, online_ids) do
+  #   cond do
+  #     id == sender_id ->
+  #       "sent"
+
+  #     id in online_ids ->
+  #       "read"
+
+  #     is_user_online?(id) ->
+  #       "delivered"
+
+  #     true ->
+  #       "pending"
+  #   end
+  # end
+
+  # defp is_user_online?(user_id) do
+  #   WhatsappCloneWeb.Presence.list("user:#{user_id}")
+  #   |> Map.has_key?(user_id)
+  # end
+
+  require Logger
+
+  defp status_for(id, sender_id, online_ids) do
+    cond do
+      id == sender_id ->
+        Logger.debug("Status for #{id}: sender -> sent")
+        "sent"
+
+      id in online_ids ->
+        Logger.debug("Status for #{id}: present in chat -> read")
+        "read"
+
+      is_user_online?(id) ->
+        Logger.debug("Status for #{id}: online in user:* channel -> delivered")
+        "delivered"
+
+      true ->
+        Logger.debug("Status for #{id}: offline -> pending")
+        "pending"
+    end
+  end
+
+  defp is_user_online?(user_id) do
+    key = to_string(user_id)
+    topic = "user:#{key}"
+
+    presence_list = WhatsappCloneWeb.Presence.list(topic)
+    is_online = Map.has_key?(presence_list, key)
+
+    Logger.debug("Checking presence on topic #{topic}")
+    Logger.debug("Presence data: #{inspect(presence_list)}")
+    Logger.debug("User #{key} online? -> #{is_online}")
+
+    is_online
+  end
+
 
   defp update_message_status(message_id, user_id, new_status) do
     existing = Repo.get_by(MessageStatus, message_id: message_id, user_id: user_id)
@@ -725,15 +1192,25 @@ defmodule WhatsappCloneWeb.ChatChannel do
         })
         |> Repo.insert()
 
-      status_value(new_status) > status_value(existing.status) ->
-        existing
-        |> MessageStatus.changeset(%{"status" => new_status})
-        |> Repo.update()
-
       true ->
-        {:ok, existing}
+        if status_value(new_status) > status_value(existing.status) do
+          existing
+          |> MessageStatus.changeset(%{"status" => new_status})
+          |> Repo.update()
+        else
+          {:ok, existing}
+        end
     end
   end
+
+  # defp status_value("sent"), do: 1
+  # defp status_value("delivered"), do: 2
+  # defp status_value("read"), do: 3
+  # defp status_value(_), do: 0
+
+
+  defp format_errors(changeset),
+    do: Ecto.Changeset.traverse_errors(changeset, & &1)
 
   defp status_value("sent"), do: 1
   defp status_value("delivered"), do: 2

@@ -287,7 +287,7 @@ defmodule WhatsappClone.Messaging do
     |> where([m], m.conversation_id == ^conversation_id)
     |> order_by([m], asc: m.inserted_at)
     |> Repo.all()
-    |> Repo.preload([:attachments, :status_entries])
+    |> Repo.preload([:attachments, :sender, status_entries: [:user]])
   end
 
   def create_message(conversation_id, sender_id, %{
@@ -368,6 +368,38 @@ defmodule WhatsappClone.Messaging do
   def get_message_with_details(id) do
     Repo.get(Message, id)
     |> Repo.preload([:attachments, :status_entries])
+  end
+
+  def update_message_status(message_id, user_id, new_status, timestamp) do
+    with %Message{} = msg <- Repo.get(Message, message_id),
+         true <- user_in_conversation?(user_id, msg.conversation_id) do
+      existing = Repo.get_by(MessageStatus, message_id: message_id, user_id: user_id)
+
+      cond do
+        existing == nil ->
+          %MessageStatus{}
+          |> MessageStatus.changeset(%{
+            "message_id" => message_id,
+            "user_id" => user_id,
+            "status" => new_status,
+            "status_ts" => timestamp
+          })
+          |> Repo.insert()
+
+        existing.status != new_status and status_value(new_status) > status_value(existing.status) ->
+          existing
+          |> MessageStatus.changeset(%{
+            "status" => new_status,
+            "status_ts" => timestamp
+          })
+          |> Repo.update()
+
+        true ->
+          {:ok, existing}
+      end
+    else
+      _ -> {:error, :unauthorized}
+    end
   end
 
   def update_message_status(message_id, user_id, new_status) do

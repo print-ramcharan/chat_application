@@ -101,17 +101,27 @@ defmodule WhatsappClone.MessageStatus do
   @foreign_key_type :binary_id
 
   @derive {Jason.Encoder, only: [
-    :id, :message_id, :user_id, :status, :status_ts, :inserted_at, :updated_at
+    :id, :message_id, :user_id, :status, :status_ts, :inserted_at, :updated_at, :user
   ]}
+  # schema "message_statuses" do
+  #   field :message_id, :binary_id
+  #   field :user_id, :binary_id
+  #   field :status, :string
+  #   field :status_ts, :utc_datetime_usec
+
+  #   timestamps(type: :naive_datetime)
+
+  # end
   schema "message_statuses" do
-    field :message_id, :binary_id
-    field :user_id, :binary_id
     field :status, :string
     field :status_ts, :utc_datetime_usec
 
-    timestamps(type: :naive_datetime)
+    belongs_to :message, WhatsappClone.Message, foreign_key: :message_id
+    belongs_to :user, WhatsappClone.User, foreign_key: :user_id
 
+    timestamps(type: :naive_datetime)
   end
+
 
   @doc false
   def changeset(status_entry, attrs) do
