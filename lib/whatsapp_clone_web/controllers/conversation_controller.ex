@@ -3,8 +3,9 @@ defmodule WhatsappCloneWeb.ConversationController do
 
   alias WhatsappClone.{Repo, Conversations, ConversationMember, Conversation, Message}
   import Ecto.Query
-
+  require Logger
   action_fallback WhatsappCloneWeb.FallbackController
+
 
   @doc """
   GET /api/users/:id/conversations
@@ -84,6 +85,7 @@ defp do_create_conversation(conn, params) do
     {:ok, convo} ->
       convo =
         WhatsappClone.Repo.preload(convo, [
+          :creator,
           conversation_members: [:user],
           messages: []
         ])
@@ -97,6 +99,25 @@ defp do_create_conversation(conn, params) do
   end
 end
 
+
+# in ConversationController
+def avatar(conn, %{"id" => id}) do
+  case Repo.get(Conversation, id) do
+    nil ->
+      conn
+      |> put_status(:not_found)
+      |> json(%{error: "Conversation not found"})
+
+    convo ->
+      avatar_data =
+        case convo.group_avatar_url do
+          nil -> ""
+          data when is_binary(data) -> Base.encode64(data)
+          _ -> ""
+        end
+      json(conn, %{avatar_base64: avatar_data})
+  end
+end
 
 @doc """
 PATCH /api/conversations/:id/add_member
@@ -245,47 +266,121 @@ end
   (In your router, this route is used to list conversations for current user.)
   We assume `conn.assigns.user_id` is set by an authentication plug.
   """
+  # def list_for_current_user(conn, _params) do
+  #   user_id = conn.assigns[:user_id]
+  #   conversations = Conversations.list_user_conversations(user_id)
+
+  #   render(conn, WhatsappCloneWeb.ConversationView, "index.json", conversations: conversations)
+  # end
   def list_for_current_user(conn, _params) do
     user_id = conn.assigns[:user_id]
-    conversations = Conversations.list_user_conversations(user_id)
+
+    conversations =
+      Conversations.list_user_conversations(user_id)
+      |> WhatsappClone.Repo.preload(:creator)
 
     render(conn, WhatsappCloneWeb.ConversationView, "index.json", conversations: conversations)
   end
 
 
+
+  # @doc """
+  # PATCH /api/conversations/:id
+  # Updates a conversation’s metadata (e.g., changing group name or avatar).
+  # Body params: %{"group_name" => "...", "group_avatar_url" => "..."}
+  # """
+  # def update(conn, %{"id" => convo_id} = params) do
+  #   user_id = conn.assigns[:user_id]
+
+  #   # Check if user is admin of the conversation
+  #   is_admin =
+  #     Repo.exists?(
+  #       from cm in ConversationMember,
+  #       where: cm.conversation_id == ^convo_id and cm.user_id == ^user_id and cm.is_admin == true
+  #     )
+
+  #   if is_admin do
+  #     attrs = Map.drop(params, ["id"])
+  #     case Conversations.update_conversation(convo_id, attrs) do
+  #       {:ok, convo} ->
+  #         convo = Repo.preload(convo, [:conversation_members, :messages])
+  #         render(conn, WhatsappCloneWeb.ConversationView, "show.json", conversation: convo)
+
+  #       {:error, changeset} ->
+  #         conn
+  #         |> put_status(:unprocessable_entity)
+  #         |> json(%{errors: render_changeset_errors(changeset)})
+  #     end
+  #   else
+  #     conn
+  #     |> put_status(:forbidden)
+  #     |> json(%{error: "Only admins can update the conversation"})
+  #   end
+  # end
+
   @doc """
-  PATCH /api/conversations/:id
-  Updates a conversation’s metadata (e.g., changing group name or avatar).
-  Body params: %{"group_name" => "...", "group_avatar_url" => "..."}
-  """
-  def update(conn, %{"id" => convo_id} = params) do
-    user_id = conn.assigns[:user_id]
+PATCH /api/conversations/:id
+Updates a conversation’s metadata — either group name or avatar.
+Accepts one of:
+  - %{"group_name" => "..."}
+  - %{"group_avatar_url" => "..."}
+"""
+def update(conn, %{"id" => convo_id} = params) do
+  user_id = conn.assigns[:user_id]
 
-    # Check if user is admin of the conversation
-    is_admin =
-      Repo.exists?(
-        from cm in ConversationMember,
-        where: cm.conversation_id == ^convo_id and cm.user_id == ^user_id and cm.is_admin == true
-      )
+  is_admin =
+    Repo.exists?(
+      from cm in ConversationMember,
+      where: cm.conversation_id == ^convo_id and cm.user_id == ^user_id and cm.is_admin == true
+    )
 
-    if is_admin do
-      attrs = Map.drop(params, ["id"])
-      case Conversations.update_conversation(convo_id, attrs) do
-        {:ok, convo} ->
-          convo = Repo.preload(convo, [:conversation_members, :messages])
-          render(conn, WhatsappCloneWeb.ConversationView, "show.json", conversation: convo)
+  if is_admin do
+    attrs = Map.drop(params, ["id"])
 
-        {:error, changeset} ->
-          conn
-          |> put_status(:unprocessable_entity)
-          |> json(%{errors: render_changeset_errors(changeset)})
-      end
-    else
-      conn
-      |> put_status(:forbidden)
-      |> json(%{error: "Only admins can update the conversation"})
+    # Ensure only one of the fields is being updated at a time
+    allowed_keys = ["group_name", "group_avatar_url"]
+    provided_keys = Map.keys(attrs)
+
+    cond do
+      Enum.count(provided_keys) == 0 ->
+        conn
+        |> put_status(:bad_request)
+        |> json(%{error: "Provide either group_name or group_avatar_url"})
+
+      Enum.count(provided_keys) > 1 ->
+        conn
+        |> put_status(:bad_request)
+        |> json(%{error: "Only one field can be updated at a time"})
+
+      Enum.any?(provided_keys, fn key -> not Enum.member?(allowed_keys, key) end) ->
+        conn
+        |> put_status(:bad_request)
+        |> json(%{error: "Invalid field provided"})
+
+      true ->
+        case Conversations.update_conversation(convo_id, attrs) do
+          {:ok, convo} ->
+            convo =
+              convo
+              |> Repo.preload([
+                :creator,
+                :messages,
+                conversation_members: [:user]
+              ])
+              render(conn, WhatsappCloneWeb.ConversationView, "show.json", conversation: convo)
+
+          {:error, changeset} ->
+            conn
+            |> put_status(:unprocessable_entity)
+            |> json(%{errors: render_changeset_errors(changeset)})
+        end
     end
+  else
+    conn
+    |> put_status(:forbidden)
+    |> json(%{error: "Only admins can update the conversation"})
   end
+end
 
   @doc """
 DELETE /api/conversations/:id
@@ -357,7 +452,7 @@ def update_admins(conn, %{"id" => convo_id} = params) do
     )
     |> Repo.update_all(set: [is_admin: false])
 
-    convo = Conversations.get_conversation!(convo_id) |> Repo.preload([conversation_members: [:user], messages: []])
+    convo = Conversations.get_conversation!(convo_id) |> Repo.preload([:creator, conversation_members: [:user], messages: []])
 
     render(conn, WhatsappCloneWeb.ConversationView, "show.json", conversation: convo)
   else
@@ -449,6 +544,47 @@ end
 
 
 
+# def details(conn, %{"id" => id}) do
+#   conversation =
+#     Conversation
+#     |> Repo.get(id)
+#     |> Repo.preload([:creator, conversation_members: [:user]])
+
+#   case conversation do
+#     nil ->
+#       conn
+#       |> put_status(:not_found)
+#       |> json(%{error: "Conversation not found"})
+
+#     convo ->
+#       members = Enum.map(convo.conversation_members, fn m ->
+#         %{
+#           id: m.user.id,
+#           username: m.user.username,
+#           avatar_data: Base.encode64(m.user.avatar_data || <<>>),
+#           is_admin: m.is_admin
+#         }
+#       end)
+
+#       json(conn, %{
+#         id: convo.id,
+#         group_name: convo.group_name,
+#         group_avatar_url: convo.group_avatar_url,
+#         created_by: convo.created_by,
+#         created_at: convo.inserted_at,
+#         creator: %{
+#           id: convo.creator.id,
+#           username: convo.creator.username,
+#           avatar_data: Base.encode64(convo.creator.avatar_data || <<>>),
+#         },
+#         members: members
+#       })
+#   end
+# end
+
+
+
+
 def details(conn, %{"id" => id}) do
   conversation =
     Conversation
@@ -463,32 +599,36 @@ def details(conn, %{"id" => id}) do
 
     convo ->
       members = Enum.map(convo.conversation_members, fn m ->
+        encoded_avatar = Base.encode64(m.user.avatar_data || <<>>)
+        Logger.debug("👤 Member #{m.user.username} avatar: #{encoded_avatar}")
+
         %{
           id: m.user.id,
           username: m.user.username,
-          avatar_data: Base.encode64(m.user.avatar_data || <<>>),
+          avatar_url: encoded_avatar,
           is_admin: m.is_admin
         }
       end)
 
+      creator_avatar = Base.encode64(convo.creator.avatar_data || <<>>)
+      Logger.debug("⭐ Creator #{convo.creator.username} avatar: #{creator_avatar}")
+
       json(conn, %{
         id: convo.id,
+        is_group: convo.is_group,
         group_name: convo.group_name,
-        group_avatar_url: convo.group_avatar_url,
+        group_avatar_url: convo.group_avatar_url,#Base.encode64(convo.group_avatar_url || <<>>),
         created_by: convo.created_by,
         created_at: convo.inserted_at,
         creator: %{
           id: convo.creator.id,
           username: convo.creator.username,
-          avatar_data: Base.encode64(convo.creator.avatar_data || <<>>),
+          avatar_data: creator_avatar,
         },
         members: members
       })
   end
 end
-
-
-
 
   defp render_changeset_errors(changeset) do
     Ecto.Changeset.traverse_errors(changeset, fn {msg, _opts} -> msg end)

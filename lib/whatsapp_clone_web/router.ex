@@ -103,9 +103,12 @@ defmodule WhatsappCloneWeb.Router do
     get "/conversations", ConversationController, :list_for_current_user
     get "/conversations/:id/members", ConversationController, :members
     get "/conversations/:id/details", ConversationController, :details
+    get "/conversations/:id/avatar", ConversationController, :avatar
 
     patch "/conversations/:id", ConversationController, :update
     patch "/conversations/:id/admins", ConversationController, :update_admins
+    # patch "/conversations/:id/avatar", ConversationController, :update_avatar
+
     # delete "/conversations/:id", ConversationController, :delete
     # post "/conversations/:id/remove_member", ConversationController, :remove_member
 

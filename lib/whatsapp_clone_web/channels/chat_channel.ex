@@ -1019,7 +1019,7 @@ def handle_in("send_message", %{"encrypted_body" => body, "message_type" => type
       # Logger.debug(">>> Broadcasting: #{inspect(broadcast_payload)}")
 # broadcast!(socket, "new_message", broadcast_payload)
 
-push(socket, "new_message", broadcast_payload)
+# push(socket, "new_message", broadcast_payload)
 broadcast_from!(socket, "new_message", broadcast_payload)
       # broadcast!(socket, "new_message", broadcast_payload)
 
@@ -1056,6 +1056,11 @@ broadcast_from!(socket, "new_message", broadcast_payload)
         Enum.map(statuses, fn s ->
           Map.merge(s, Map.get(user_map, s.user_id) || %{})
         end)
+
+        Enum.each(statuses_with_user, fn status ->
+          Logger.debug("🟨 Status user info — ID: #{status.user_id}, Name: #{inspect(status.display_name)}, Avatar: #{String.slice(to_string(status.avatar_data || ""), 0, 20)}...")
+        end)
+
 
       {:reply, {:ok, %{message: broadcast_payload, statuses: statuses_with_user}}, socket}
 
@@ -1142,7 +1147,6 @@ end
   #   |> Map.has_key?(user_id)
   # end
 
-  require Logger
 
   defp status_for(id, sender_id, online_ids) do
     cond do
@@ -1159,8 +1163,8 @@ end
         "delivered"
 
       true ->
-        Logger.debug("Status for #{id}: offline -> pending")
-        "pending"
+        Logger.debug("Status for #{id}: offline -> sent")
+        "sent"
     end
   end
 
