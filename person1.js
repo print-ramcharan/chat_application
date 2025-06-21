@@ -53,7 +53,7 @@ console.log("Creating socket...");
 let socket = new Socket("ws://localhost:4000/socket", {
   transport: WebSocket,
   params: {
-    token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3NDk5MTAyMjAsImlhdCI6MTc0OTMwNTQyMCwibmJmIjoxNzQ5MzA1NDIwLCJzdWIiOiJlYmYyNzQ1NC03OTNjLTQwMmYtOTM0Zi04ZDNkNGVmZGY1NDkifQ.W99xIJeCKG--pjjTUA8VIDUULwU2U13VH6sgflq1-sU"
+    token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3NTA4ODU4MzAsImlhdCI6MTc1MDI4MTAzMCwibmJmIjoxNzUwMjgxMDMwLCJzdWIiOiIzOWM5MGE0Ni01MTk3LTQ3MTQtYWY0My0xZjZiNGIxYTJlNDcifQ.-kGnSMKbhRO3eSyXoLyn05HWDfGr1ThHOTAaR0Vml2Q"
   }
 });
 
@@ -63,7 +63,7 @@ socket.onError(() => console.log("❌ Socket connection error"));
 socket.onClose(() => console.log("❌ Socket connection closed"));
 
 console.log("Connecting to channel...");
-let channel = socket.channel("chat:b6af1587-cb7c-4f75-ad97-3138ed87d758", {});
+let channel = socket.channel("chat:35a76b1f-0b43-44d8-ad12-3d209b1a1e38", {});
 
 channel.join()
   .receive("ok", resp => {

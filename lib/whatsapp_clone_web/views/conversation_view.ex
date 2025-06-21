@@ -116,8 +116,18 @@ defmodule WhatsappCloneWeb.ConversationView do
     %{data: render_many(conversations, __MODULE__, "conversation.json")}
   end
 
+  # def render("show.json", %{conversation: conversation, reused: true}) do
+  #   %{data: render_one(conversation, __MODULE__, "conversation.json"), reused: true}
+  # end
+  def render("show.json", %{conversation: conversation, reused: true}) do
+    %{data: render_one(conversation, __MODULE__, "conversation.json", as: :conversation, reused: true), reused: true}
+  end
+
+  # def render("show.json", %{conversation: conversation}) do
+  #   %{data: render_one(conversation, __MODULE__, "conversation.json")}
+  # end
   def render("show.json", %{conversation: conversation}) do
-    %{data: render_one(conversation, __MODULE__, "conversation.json")}
+    %{data: render_one(conversation, __MODULE__, "conversation.json", as: :conversation)}
   end
 
   def render("conversation.json", %{conversation: convo}) do
@@ -133,27 +143,96 @@ defmodule WhatsappCloneWeb.ConversationView do
       id: convo.id,
       is_group: convo.is_group,
       group_name: convo.group_name,
-      group_avatar_url: convo.group_avatar_url, #Base.encode64(convo.group_avatar_url || <<>>),
+      group_avatar_url: Base.encode64(convo.group_avatar_url || <<>>),#convo.group_avatar_url,
       created_by: convo.creator.id,
       inserted_at: convo.inserted_at,
       updated_at: convo.updated_at,
       last_message: last_message,
+      reused: Map.get(convo, :reused, false),
+      unread_count: Map.get(convo, :unread_count, 0),
       members: render_many(convo.conversation_members, WhatsappCloneWeb.UserView, "member.json")
     }
   end
 
+  defp compute_status_summary(nil), do: "sent"
+
+  defp compute_status_summary(entries, current_user_id) do
+    status_priority = ["pending", "sent", "delivered", "read"]
+
+    other_statuses =
+      entries
+      |> Enum.reject(&(&1.user_id == current_user_id))
+      |> Enum.map(& &1.status)
+
+    Enum.min_by(other_statuses, fn status ->
+      Enum.find_index(status_priority, &(&1 == status)) || length(status_priority)
+    end)
+  end
+
+
   def render("message.json", %{message: nil}), do: nil
 
   def render("message.json", %{message: message}) do
+    status_entries = message.status_entries || []
+    current_user_id = message.sender_id
+
     %{
       id: message.id,
       sender_id: message.sender_id,
-      conversation_id: Map.get(message, :conversation_id), # add if needed
+      conversation_id: Map.get(message, :conversation_id),
       encrypted_body: message.encrypted_body,
       message_type: message.message_type,
-      inserted_at: message.inserted_at
+      inserted_at: message.inserted_at,
+      message_status: compute_status_summary(status_entries, current_user_id)
     }
   end
+
+  # defp compute_status_summary(entries) do
+
+  #   other_statuses = Enum.filter(entries, fn s -> s.user_id != user_id end)
+
+  #   combined_status =
+  #     cond do
+  #       Enum.all?(other_statuses, &(&1.status == "read")) -> "read"
+  #       Enum.any?(other_statuses, &(&1.status == "delivered")) -> "delivered"
+  #       true -> "sent"
+  #     end
+  #   # statuses = Enum.map(entries, & &1.status)
+
+  #   # cond do
+  #   #   Enum.all?(statuses, &(&1 == "read")) ->
+  #   #     "read"
+
+  #   #   Enum.all?(statuses, &(&1 in ["read", "delivered"])) ->
+  #   #     "delivered"
+
+  #   #   true ->
+  #   #     "sent"
+  #   # end
+  # end
+  # def render("message.json", %{message: nil}), do: nil
+
+  # def render("message.json", %{message: message}) do
+  #   status_entries = message.status_entries || []
+  #   %{
+  #     id: message.id,
+  #     sender_id: message.sender_id,
+  #     conversation_id: Map.get(message, :conversation_id), # add if needed
+  #     encrypted_body: message.encrypted_body,
+  #     message_type: message.message_type,
+  #     inserted_at: message.inserted_at,
+  #     message_status: compute_status_summary(status_entries)
+  #     # status_entries:
+  #     # Enum.map(message.status_entries || [], fn entry ->
+  #     #   %{
+  #     #     user_id: entry.user_id,
+  #     #     status: entry.status,
+  #     #     status_ts: entry.status_ts
+  #     #   }
+
+  #     # end)
+  #   }
+  # end
   # defp safe_encode_avatar(nil), do: nil
 
   # defp safe_encode_avatar(binary) when is_binary(binary) do

@@ -13,6 +13,20 @@ defmodule WhatsappCloneWeb.UserController do
         json(conn, %{id: user.id, username: user.username, phone_number: user.phone_number})
     end
   end
+  def update_fcm_token(conn, %{"fcm_token" => token}) do
+    user_id = conn.assigns[:user_id]
+
+    case WhatsappClone.Accounts.update_user_fcm_token(user_id, token) do
+      {:ok, _user} ->
+        json(conn, %{message: "FCM token updated successfully"})
+
+      {:error, reason} ->
+        conn
+        |> put_status(:bad_request)
+        |> json(%{error: reason})
+    end
+  end
+
 
   # def avatar(conn, %{"avatar_url" => avatar_url}) do
   #   user_id = conn.assigns[:user_id]

@@ -70,6 +70,8 @@ defmodule WhatsappClone.User do
     # for authentication:
     field :password, :string, virtual: true
     field :hashed_password, :string
+    field :fcm_token, :string
+
 
     timestamps(type: :utc_datetime)
   end

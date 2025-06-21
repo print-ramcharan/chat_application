@@ -10,7 +10,7 @@ defmodule WhatsappCloneWeb.MessageStatusController do
   Body params: %{"status" => "delivered" | "read"}
   Requires `conn.assigns.user_id` to be the user updating their own status.
   """
-  def update(conn, %{"message_id" => message_id, "status" => new_status}) do
+  def update(conn, %{"message_id" => message_id, "status_code" => new_status}) do
     user_id = conn.assigns[:user_id]
 
     case Messaging.update_message_status(message_id, user_id, new_status) do

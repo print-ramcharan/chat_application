@@ -44,6 +44,10 @@ defmodule WhatsappClone.MixProject do
       {:bcrypt_elixir, "~> 3.0"},
       {:joken, "~> 2.6"},
       {:libgraph, "~> 0.13.3"},
+      {:httpoison, "~> 1.8"},
+      {:goth, "~> 1.3"},
+      {:tesla, "~> 1.4"},
+      {:hackney, "~> 1.18"},
     ]
   end
 

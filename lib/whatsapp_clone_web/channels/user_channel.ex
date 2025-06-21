@@ -15,30 +15,74 @@ defmodule WhatsappCloneWeb.UserChannel do
   end
 
   # Track user presence after successful join
-  def handle_info(:after_join, socket) do
-    user_id = to_string(socket.assigns.user_id)
+  # def handle_info(:after_join, socket) do
+  #   user_id = to_string(socket.assigns.user_id)
 
-    {:ok, _} = Presence.track(socket, user_id, %{
+  #   {:ok, _} = Presence.track(socket, user_id, %{
+  #     online_at: System.system_time(:second)
+  #   })
+
+  #   # Optionally push full presence state to the user (if needed)
+  #   push(socket, "presence_state", Presence.list(socket.topic))
+
+  #   {:noreply, socket}
+  # end
+  def handle_info(:after_join, socket) do
+    user_id = socket.assigns.user_id
+
+    {:ok, _} = Presence.track(socket, to_string(user_id), %{
       online_at: System.system_time(:second)
     })
 
-    # Optionally push full presence state to the user (if needed)
+    # Push full presence (optional)
     push(socket, "presence_state", Presence.list(socket.topic))
+
+    # 💡 Update undelivered messages to DELIVERED
+    Task.start(fn -> mark_messages_as_delivered(user_id) end)
 
     {:noreply, socket}
   end
+
+  defp mark_messages_as_delivered(user_id) do
+    conversations = WhatsappClone.Conversations.list_user_conversations(user_id)
+
+    Enum.each(conversations, fn convo ->
+      messages = WhatsappClone.Messaging.list_undelivered_messages(convo.id, user_id)
+
+      Enum.each(messages, fn message ->
+        WhatsappClone.Messaging.update_message_status(
+          message.id,
+          user_id,
+          "delivered",
+          DateTime.utc_now()
+        )
+
+        # Optionally broadcast to the chat channel
+        WhatsappCloneWeb.Endpoint.broadcast("chat:#{convo.id}", "message_status_update", %{
+          message_id: message.id,
+          user_id: user_id,
+          status: "delivered"
+        })
+      end)
+    end)
+  end
+
+
+
 
   # === Handle sending a direct message to a user ===
   def handle_in("new_message", %{
         "recipient_id" => recipient_id,
         "message_id" => message_id,
         "conversation_id" => conversation_id,
-        "encrypted_body" => encrypted_body
+        "encrypted_body" => encrypted_body,
+        "message_status" => message_status,
       }, socket) do
     Endpoint.broadcast("user:#{recipient_id}", "new_message", %{
       "message_id" => message_id,
       "conversation_id" => conversation_id,
-      "encrypted_body" => encrypted_body
+      "encrypted_body" => encrypted_body,
+      "message_status" => message_status,
     })
 
     {:noreply, socket}

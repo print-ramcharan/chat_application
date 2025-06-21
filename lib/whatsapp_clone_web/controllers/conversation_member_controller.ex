@@ -1,4 +1,6 @@
 defmodule WhatsappCloneWeb.ConversationMemberController do
+  import Ecto.Query, only: [from: 2]
+
   use WhatsappCloneWeb, :controller
   alias WhatsappClone.{Repo, ConversationMember, Conversations}
 
@@ -96,6 +98,22 @@ defmodule WhatsappCloneWeb.ConversationMemberController do
       |> json(%{error: "Not a member of this conversation"})
     end
   end
+
+  def unread_count(conversation_id, user_id) do
+    from(m in Message,
+      join: cm in ConversationMember,
+      on: cm.conversation_id == m.conversation_id and cm.user_id == ^user_id,
+      where: m.conversation_id == ^conversation_id,
+      where: is_nil(cm.last_read_at) or m.inserted_at > cm.last_read_at,
+      select: count(m.id)
+    )
+    |> Repo.one()
+  end
+
+
+
+
+
 
   defp render_changeset_errors(changeset) do
     Ecto.Changeset.traverse_errors(changeset, fn {msg, _opts} -> msg end)

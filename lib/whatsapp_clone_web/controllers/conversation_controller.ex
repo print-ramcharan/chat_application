@@ -67,11 +67,15 @@ def create(conn, %{"members" => member_ids, "is_group" => false} = params) when 
     conversation ->
       # Return existing convo if already present
       convo = WhatsappClone.Repo.preload(conversation, [
+        :creator,
         conversation_members: [:user],
         messages: []
       ])
+      convo = Map.put(convo, :reused, true)
 
-      render(conn, WhatsappCloneWeb.ConversationView, "show.json", conversation: convo)
+      # render(conn, WhatsappCloneWeb.ConversationView, "show.json", conversation: convo)
+      render(conn, WhatsappCloneWeb.ConversationView, "show.json", conversation: convo, reused: true)
+
   end
 end
 
@@ -272,6 +276,16 @@ end
 
   #   render(conn, WhatsappCloneWeb.ConversationView, "index.json", conversations: conversations)
   # end
+  # def list_for_current_user(conn, _params) do
+  #   user_id = conn.assigns[:user_id]
+
+  #   conversations =
+  #     Conversations.list_user_conversations(user_id)
+  #     |> WhatsappClone.Repo.preload(:creator)
+
+  #   render(conn, WhatsappCloneWeb.ConversationView, "index.json", conversations: conversations)
+  # end
+
   def list_for_current_user(conn, _params) do
     user_id = conn.assigns[:user_id]
 
@@ -279,8 +293,16 @@ end
       Conversations.list_user_conversations(user_id)
       |> WhatsappClone.Repo.preload(:creator)
 
-    render(conn, WhatsappCloneWeb.ConversationView, "index.json", conversations: conversations)
+    # Add unread count to each conversation
+    conversations_with_counts =
+      Enum.map(conversations, fn convo ->
+        count = WhatsappClone.Messaging.unread_count(convo.id, user_id)
+        Map.put(convo, :unread_count, count)
+      end)
+
+    render(conn, WhatsappCloneWeb.ConversationView, "index.json", conversations: conversations_with_counts)
   end
+
 
 
 
@@ -382,6 +404,13 @@ def update(conn, %{"id" => convo_id} = params) do
   end
 end
 
+def mark_as_read(conn, %{"conversation_id" => cid, "user_id" => uid}) do
+  ts = DateTime.utc_now()
+  Messaging.mark_conversation_read(cid, uid, ts)
+  json(conn, %{status: "ok", read_at: ts})
+end
+
+
   @doc """
 DELETE /api/conversations/:id
 Deletes a conversation if the current user is admin.
@@ -461,41 +490,6 @@ def update_admins(conn, %{"id" => convo_id} = params) do
     |> json(%{error: "Only admins can modify admins"})
   end
 end
-
-# def members(conn, %{"id" => convo_id}) do
-#   import Ecto.Query, only: [from: 2]
-
-#   members =
-#     from(cm in ConversationMember,
-#       where: cm.conversation_id == ^convo_id,
-#       join: u in assoc(cm, :user),
-#       select: %{
-#         user_id: u.id,
-#         username: u.username,
-#         avatar_data: Base.encode64(u.avatar_data || <<>>),
-#         is_admin: cm.is_admin
-#       }
-#     )
-#     |> Repo.all()
-
-#   if members == [] do
-#     case Repo.get(Conversation, convo_id) do
-#       nil ->
-#         conn
-#         |> put_status(:not_found)
-#         |> json(%{error: "Conversation not found"})
-
-#       _ ->
-#         conn
-#         |> put_status(:ok)
-#         |> json(members) # empty list
-#     end
-#   else
-#     conn
-#     |> put_status(:ok)
-#     |> json(members)
-#   end
-# end
 
 def members(conn, %{"id" => convo_id}) do
   import Ecto.Query, only: [from: 2]
@@ -617,7 +611,7 @@ def details(conn, %{"id" => id}) do
         id: convo.id,
         is_group: convo.is_group,
         group_name: convo.group_name,
-        group_avatar_url: convo.group_avatar_url,#Base.encode64(convo.group_avatar_url || <<>>),
+        group_avatar_url: Base.encode64(convo.group_avatar_url || <<>>),#convo.group_avatar_url,#
         created_by: convo.created_by,
         created_at: convo.inserted_at,
         creator: %{

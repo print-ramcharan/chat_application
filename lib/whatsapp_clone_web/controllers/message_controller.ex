@@ -707,15 +707,65 @@ defmodule WhatsappCloneWeb.MessageController do
       :error -> raise ArgumentError, "Invalid UUID: #{uuid_str}"
     end
   end
+  def reply(conn, %{"message_id" => message_id, "content" => content}) do
+    user_id = conn.assigns[:user_id]
 
-  def index(conn, %{"conversation_id" => conversation_id}) do
-    messages = Messaging.list_messages(conversation_id)
+    with {:ok, original} <- fetch_original_message(message_id),
+         {:ok, _member} <- fetch_conversation_membership(original.conversation_id, user_id),
+         {:ok, reply_msg} <- WhatsappClone.Messaging.create_reply_message(user_id, original.conversation_id, content, message_id) do
 
-    IO.inspect(messages, label: "Messages being returned")
+      # json(conn, reply_msg)
+      json(conn, Repo.preload(reply_msg, :attachments))
 
-    # json(conn, %{messages: messages})
-    render(conn, WhatsappCloneWeb.MessageView, "index.json", messages: messages)
+    else
+      {:error, :not_found} ->
+        conn |> put_status(:not_found) |> json(%{error: "Original message not found"})
 
+      {:error, :forbidden} ->
+        conn |> put_status(:forbidden) |> json(%{error: "User not part of conversation"})
+
+      {:error, reason} ->
+        conn |> put_status(:bad_request) |> json(%{error: inspect(reason)})
+    end
   end
+
+  defp fetch_original_message(message_id) do
+    case Repo.get(Message, message_id) do
+      nil -> {:error, :not_found}
+      msg -> {:ok, msg}
+    end
+  end
+
+  defp fetch_conversation_membership(conversation_id, user_id) do
+    case Repo.get_by(ConversationMember, conversation_id: conversation_id, user_id: user_id) do
+      nil -> {:error, :forbidden}
+      cm -> {:ok, cm}
+    end
+  end
+
+
+  # def index(conn, %{"conversation_id" => conversation_id}) do
+  #   WhatsappClone.Messaging.set_last_read_at(conversation_id, user_id)
+
+  #   messages = Messaging.list_messages(conversation_id)
+
+  #   IO.inspect(messages, label: "Messages being returned")
+
+  #   # json(conn, %{messages: messages})
+  #   render(conn, WhatsappCloneWeb.MessageView, "index.json", messages: messages)
+
+  # end
+  def index(conn, %{"conversation_id" => conversation_id}) do
+    user_id = conn.assigns[:user_id]
+    now = DateTime.utc_now()
+
+    # Mark messages as read
+    WhatsappClone.Messaging.mark_conversation_read(conversation_id, user_id, now)
+
+    messages = WhatsappClone.Messaging.list_messages(conversation_id)
+
+    render(conn, WhatsappCloneWeb.MessageView, "index.json", messages: messages)
+  end
+
 
 end

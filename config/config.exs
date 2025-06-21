@@ -26,6 +26,17 @@ config :whatsapp_clone, WhatsappCloneWeb.Endpoint,
   config :joken,
   default_signer: "KnnD7jyxnhg0En/Zs4+XMXUFAVacWMV1uI+8b3EjEZNyBpdbfz9te6Z9ymLlOYz"
 
+  # config :goth, Goth,
+  # name: WhatsappClone.Goth,
+  # json: File.read!("config/firebase_service_account.json")
+
+  # config :goth, name: WhatsappClone.Goth,
+  # json: File.read!("config/firebase-service-account.json")
+  config :goth, WhatsappClone.Goth,
+  json: File.read!("config/firebase-service-account.json")
+
+  config :goth, json: File.read!("config/firebase-service-account.json")
+
 # Configures the mailer
 #
 # By default it uses the "Local" adapter which stores the emails

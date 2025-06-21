@@ -187,6 +187,12 @@ defmodule WhatsappClone.Accounts do
   """
   def get_user(id), do: Repo.get(User, id)
 
+  def update_user_fcm_token(user_id, fcm_token) do
+    user = Repo.get!(WhatsappClone.User, user_id)
+    changeset = Ecto.Changeset.change(user, %{fcm_token: fcm_token})
+    Repo.update(changeset)
+  end
+
   @doc """
   Search users by username or display_name containing `query`.
   """

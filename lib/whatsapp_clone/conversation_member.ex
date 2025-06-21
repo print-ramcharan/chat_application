@@ -55,6 +55,7 @@ defmodule WhatsappClone.ConversationMember do
   schema "conversation_members" do
     field :joined_at, :utc_datetime_usec
     field :is_admin, :boolean, default: false
+    field :last_read_at, :utc_datetime_usec
     # field :conversation_id, :binary_id
     # field :user_id, :binary_id
     belongs_to :conversation, WhatsappClone.Conversation, type: :binary_id

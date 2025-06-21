@@ -20,6 +20,7 @@ defmodule WhatsappClone.Application do
       WhatsappCloneWeb.Endpoint,
       WhatsappCloneWeb.Presence,
       WhatsappClone.SocialGraph,
+      {Goth, name: WhatsappClone.Goth}
     ]
 
     # See https://hexdocs.pm/elixir/Supervisor.html

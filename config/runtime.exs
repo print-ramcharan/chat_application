@@ -29,6 +29,7 @@ if config_env() == :prod do
       """
        maybe_ipv6 = if System.get_env("ECTO_IPV6") in ~w(true 1), do: [:inet6], else: []
 
+
   config :whatsapp_clone, WhatsappClone.Repo,
     # ssl: true,
     url: database_url,
@@ -40,6 +41,8 @@ if config_env() == :prod do
   # want to use a different value for prod and you most likely don't want
   # to check this value into version control, so we use an environment
   # variable instead.
+  config :whatsapp_clone, fcm_server_key: System.get_env("FCM_SERVER_KEY")
+
   secret_key_base =
     System.get_env("SECRET_KEY_BASE") ||
       raise """
@@ -64,6 +67,9 @@ if config_env() == :prod do
     ],
     secret_key_base: secret_key_base
 
+  config :goth, WhatsappClone.Goth,
+    source: {:system, "GCP_CREDENTIALS"}
+    # json: System.get_env("GCP_CREDENTIALS")#File.read!("config/firebase-service-account.json")
   # ## SSL Support
   #
   # To get SSL working, you will need to add the `https` key

@@ -279,16 +279,105 @@
 
 
 defmodule WhatsappClone.Messaging do
-  import Ecto.Query, warn: false
+  # import Ecto.Query, warn: false
+  import Ecto.Query, only: [from: 2]
+  # import Ecto.Query, only: [from: 2]
   alias WhatsappClone.{Repo, Message, MessageStatus, Attachment, ConversationMember}
 
+
+  # def list_messages(conversation_id) do
+  #   Message
+  #   |> where([m], m.conversation_id == ^conversation_id)
+  #   |> order_by([m], asc: m.inserted_at)
+  #   |> Repo.all()
+  #   |> Repo.preload([:attachments, :sender, status_entries: [:user]])
+  # end
+  # def list_messages(conversation_id) do
+  #   subquery =
+  #     from m in Message,
+  #       where: m.conversation_id == ^conversation_id,
+  #       order_by: [desc: m.inserted_at],
+  #       limit: 30
+
+  #   Message
+  #   |> join(:inner, [m], s in subquery(subquery), on: m.id == s.id)
+  #   |> order_by([m], asc: m.inserted_at)  # Oldest to newest
+  #   |> preload([:attachments, :sender, status_entries: [:user]])
+  #   |> Repo.all()
+  # end
+
   def list_messages(conversation_id) do
-    Message
-    |> where([m], m.conversation_id == ^conversation_id)
-    |> order_by([m], asc: m.inserted_at)
+    subquery =
+      from m in Message,
+        where: m.conversation_id == ^conversation_id,
+        order_by: [desc: m.inserted_at],
+        limit: 30,
+        select: m.id
+
+    from(m in Message,
+      where: m.id in subquery(subquery),
+      order_by: [asc: m.inserted_at],
+      preload: [:attachments, :sender, [status_entries: :user]]
+    )
     |> Repo.all()
-    |> Repo.preload([:attachments, :sender, status_entries: [:user]])
   end
+
+
+
+  def mark_conversation_read(conversation_id, user_id, ts) do
+    from(cm in ConversationMember,
+      where: cm.conversation_id == ^conversation_id and cm.user_id == ^user_id
+    )
+    |> Repo.update_all(set: [last_read_at: ts])
+  end
+
+  # def unread_count(conversation_id, user_id) do
+  #   from m in Message,
+  #     where: m.conversation_id == ^conversation_id,
+  #     join: cm in ConversationMember,
+  #     on: cm.conversation_id == m.conversation_id and cm.user_id == ^user_id,
+  #     where: is_nil(cm.last_read_at) or m.inserted_at > cm.last_read_at,
+  #     select: count(m.id)
+  #   |> Repo.one()
+  # end
+  # def unread_count(conversation_id, user_id) do
+  #   from(m in Message,
+  #     join: cm in ConversationMember,
+  #     on: cm.conversation_id == m.conversation_id and cm.user_id == ^user_id,
+  #     where: m.conversation_id == ^conversation_id,
+  #     where: is_nil(cm.last_read_at) or m.inserted_at > cm.last_read_at,
+  #     select: count(m.id)
+  #   )
+  #   |> Repo.one()
+  # end
+  def unread_count(conversation_id, user_id) do
+    last_read_at =
+      from(cm in ConversationMember,
+        where: cm.conversation_id == ^conversation_id and cm.user_id == ^user_id,
+        select: cm.last_read_at
+      )
+      |> Repo.one()
+
+    from(m in Message,
+      join: ms in MessageStatus,
+        on: ms.message_id == m.id and ms.user_id == ^user_id,
+      where:
+        m.conversation_id == ^conversation_id and
+        m.sender_id != ^user_id and
+        (
+          is_nil(type(^last_read_at, :utc_datetime)) or
+          m.inserted_at > type(^last_read_at, :utc_datetime)
+        ),
+      where: ms.status in ^["delivered", "sent"],
+      select: count(m.id)
+    )
+    |> Repo.one()
+  end
+
+
+
+
+
 
   def create_message(conversation_id, sender_id, %{
         "encrypted_body" => encrypted_body,
@@ -354,6 +443,7 @@ defmodule WhatsappClone.Messaging do
       {:error, :unauthorized}
     end
   end
+
 
   def create_attachment(message_id, %{file_url: file_url, mime_type: mime_type}) do
     %Attachment{}
@@ -429,6 +519,41 @@ defmodule WhatsappClone.Messaging do
       _ -> {:error, :unauthorized}
     end
   end
+
+  def create_reply_message(user_id, conversation_id, content, reply_to_id) do
+    attrs = %{
+      sender_id: user_id,
+      conversation_id: conversation_id,
+      encrypted_body: content,
+      message_type: "text",
+      reply_to_id: reply_to_id
+    }
+
+    %Message{}
+    |> Message.changeset(attrs)
+    |> Repo.insert()
+  end
+
+  def list_undelivered_messages(conversation_id, user_id) do
+    last_read_at =
+      from(c in WhatsappClone.ConversationMember,
+        where: c.conversation_id == ^conversation_id and c.user_id == ^user_id,
+        select: c.last_read_at
+      )
+      |> Repo.one()
+
+    from(m in WhatsappClone.Message,
+      where: m.conversation_id == ^conversation_id,
+      join: ms in assoc(m, :status_entries),
+      on: ms.message_id == m.id and ms.user_id == ^user_id,
+      where: ms.status != "delivered",
+      where: m.inserted_at > ^last_read_at,
+      select: m
+    )
+    |> Repo.all()
+  end
+
+
 
   defp status_value("sent"), do: 1
   defp status_value("delivered"), do: 2

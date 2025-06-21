@@ -89,6 +89,9 @@ defmodule WhatsappCloneWeb.Router do
     get "/users/:id", UserController, :show
     get "/users/:id/conversations", ConversationController, :index
     patch "/users/avatar", UserController, :avatar
+    patch "/users/fcm_token", UserController, :update_fcm_token
+    # patch "/users/is_online"
+
 
     # Devices
     post "/devices", DeviceController, :create
@@ -99,6 +102,8 @@ defmodule WhatsappCloneWeb.Router do
 
     post "/conversations/:id/remove_member", ConversationController, :remove_member
     patch "/conversations/:id/add_member", ConversationController, :add_member
+
+    post "/messages/:message_id/reply", MessageController, :reply
 
     get "/conversations", ConversationController, :list_for_current_user
     get "/conversations/:id/members", ConversationController, :members
