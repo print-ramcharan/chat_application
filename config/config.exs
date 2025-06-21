@@ -19,12 +19,13 @@ config :whatsapp_clone, WhatsappCloneWeb.Endpoint,
     formats: [json: WhatsappCloneWeb.ErrorJSON],
     layout: false
   ],
-  pubsub_server: WhatsappClone.PubSub,
-  live_view: [signing_salt: "8kg3VF+k"]
+
+  pubsub_server: WhatsappClone.PubSub
 
 
   config :joken,
-  default_signer: "KnnD7jyxnhg0En/Zs4+XMXUFAVacWMV1uI+8b3EjEZNyBpdbfz9te6Z9ymLlOYz"
+  default_signer: System.get_env("JWT_SECRET") || "dev-secret-key"
+
 
   # config :goth, Goth,
   # name: WhatsappClone.Goth,
@@ -32,10 +33,18 @@ config :whatsapp_clone, WhatsappCloneWeb.Endpoint,
 
   # config :goth, name: WhatsappClone.Goth,
   # json: File.read!("config/firebase-service-account.json")
-  config :goth, WhatsappClone.Goth,
-  json: File.read!("config/firebase-service-account.json")
+  # config :goth, WhatsappClone.Goth,
+  # json: File.read!("config/firebase-service-account.json")
 
-  config :goth, json: File.read!("config/firebase-service-account.json")
+  # config :goth, WhatsappClone.Goth,
+  # json: System.get_env("FIREBASE_CREDENTIALS_JSON")
+
+  config :goth, WhatsappClone.Goth,
+  json: System.get_env("FIREBASE_CREDENTIALS_JSON") || File.read!("config/firebase-service-account.json")
+
+  config :goth, json: System.get_env("FIREBASE_CREDENTIALS_JSON")
+
+  # config :goth, json: File.read!("config/firebase-service-account.json")
 
 # Configures the mailer
 #

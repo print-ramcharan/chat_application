@@ -157,11 +157,24 @@ defmodule WhatsappClone.Accounts do
 
   Returns {:ok, %User{}} or {:error, changeset}.
   """
+  # def register_user(params) do
+  #   %User{}
+  #   |> User.registration_changeset(params)
+  #   |> Repo.insert()
+  # end
   def register_user(params) do
-    %User{}
-    |> User.registration_changeset(params)
-    |> Repo.insert()
+    case %User{}
+         |> User.registration_changeset(params)
+         |> Repo.insert() do
+      {:ok, user} ->
+        WhatsappClone.SocialGraph.add_user_to_graph(user.id) # 👈 add to graph
+        {:ok, user}
+
+      error ->
+        error
+    end
   end
+
 
   @doc """
   Authenticates a user by phone_number and password.

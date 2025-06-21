@@ -258,6 +258,10 @@ defmodule WhatsappClone.SocialGraph do
 
   def remove_friend(u1, u2), do: GenServer.cast(@name, {:remove_friend, u1, u2})
 
+  def add_user_to_graph(user_id) do
+    GenServer.cast(__MODULE__, {:add_user, user_id})
+  end
+
   @doc """
   Returns users who are not already friends or have pending friend requests with the given user.
   """
@@ -323,20 +327,44 @@ defmodule WhatsappClone.SocialGraph do
 
     {:noreply, graph}
   end
+  def handle_cast({:add_user, user_id}, graph) do
+    new_graph = Graph.add_vertex(graph, user_id)
+    {:noreply, new_graph}
+  end
+
 
   # -- INTERNALS --
 
   defp build_graph do
     graph = Graph.new(type: :undirected)
 
-    friendships =
-      Repo.all(from f in Friendship, where: f.status == "accepted")
+    users = Repo.all(from u in User, select: u.id)
+    friendships = Repo.all(from f in Friendship, where: f.status == "accepted")
+
+    graph =
+      Enum.reduce(users, graph, fn user_id, g ->
+        Graph.add_vertex(g, user_id)
+      end)
 
     Enum.reduce(friendships, graph, fn f, g ->
       g
-      |> Graph.add_vertex(f.user_id)
-      |> Graph.add_vertex(f.friend_id)
       |> Graph.add_edge(f.user_id, f.friend_id)
+      |> Graph.add_edge(f.friend_id, f.user_id)
     end)
   end
+
+
+  # defp build_graph do
+  #   graph = Graph.new(type: :undirected)
+
+  #   friendships =
+  #     Repo.all(from f in Friendship, where: f.status == "accepted")
+
+  #   Enum.reduce(friendships, graph, fn f, g ->
+  #     g
+  #     |> Graph.add_vertex(f.user_id)
+  #     |> Graph.add_vertex(f.friend_id)
+  #     |> Graph.add_edge(f.user_id, f.friend_id)
+  #   end)
+  # end
 end
