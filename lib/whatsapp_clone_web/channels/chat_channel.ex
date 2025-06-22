@@ -1568,12 +1568,7 @@ end
 
 
 
-  def handle_in("update_message_status", %{
-        "message_id" => message_id,
-        "user_id" => user_id,
-        "status" => status,
-        "status_ts" => status_ts
-      }, socket) do
+  def handle_in("update_message_status", %{"message_id" => message_id,"user_id" => user_id,"status" => status,"status_ts" => status_ts}, socket) do
     # Forward to your Messages context (expected to handle DB logic)
     WhatsappClone.Messaging.update_message_status(message_id, user_id, status, status_ts)
 
