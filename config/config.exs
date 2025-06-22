@@ -27,6 +27,7 @@ config :whatsapp_clone, WhatsappCloneWeb.Endpoint,
   default_signer: System.get_env("JWT_SECRET") || "dev-secret-key"
 
 
+
   # config :goth, Goth,
   # name: WhatsappClone.Goth,
   # json: File.read!("config/firebase_service_account.json")
@@ -41,6 +42,10 @@ config :whatsapp_clone, WhatsappCloneWeb.Endpoint,
 
   config :goth, WhatsappClone.Goth,
   json: System.get_env("FIREBASE_CREDENTIALS_JSON") || File.read!("config/firebase-service-account.json")
+  # config :goth,
+  # name: WhatsappClone.Goth,
+  # json: File.read!("config/firebase-service-account.json")
+
 
   config :goth, json: System.get_env("FIREBASE_CREDENTIALS_JSON")
 

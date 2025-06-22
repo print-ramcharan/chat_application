@@ -707,6 +707,28 @@ defmodule WhatsappCloneWeb.MessageController do
       :error -> raise ArgumentError, "Invalid UUID: #{uuid_str}"
     end
   end
+  # def reply(conn, %{"message_id" => message_id, "content" => content}) do
+  #   user_id = conn.assigns[:user_id]
+
+  #   with {:ok, original} <- fetch_original_message(message_id),
+  #        {:ok, _member} <- fetch_conversation_membership(original.conversation_id, user_id),
+  #        {:ok, reply_msg} <- WhatsappClone.Messaging.create_reply_message(user_id, original.conversation_id, content, message_id) do
+
+  #     # json(conn, reply_msg)
+  #     json(conn, Repo.preload(reply_msg, [:attachments, :status_entries]))
+
+  #   else
+  #     {:error, :not_found} ->
+  #       conn |> put_status(:not_found) |> json(%{error: "Original message not found"})
+
+  #     {:error, :forbidden} ->
+  #       conn |> put_status(:forbidden) |> json(%{error: "User not part of conversation"})
+
+  #     {:error, reason} ->
+  #       conn |> put_status(:bad_request) |> json(%{error: inspect(reason)})
+  #   end
+  # end
+
   def reply(conn, %{"message_id" => message_id, "content" => content}) do
     user_id = conn.assigns[:user_id]
 
@@ -714,9 +736,50 @@ defmodule WhatsappCloneWeb.MessageController do
          {:ok, _member} <- fetch_conversation_membership(original.conversation_id, user_id),
          {:ok, reply_msg} <- WhatsappClone.Messaging.create_reply_message(user_id, original.conversation_id, content, message_id) do
 
-      # json(conn, reply_msg)
-      json(conn, Repo.preload(reply_msg, :attachments))
+      members =
+        from(cm in WhatsappClone.ConversationMember,
+          where: cm.conversation_id == ^original.conversation_id,
+          select: cm.user_id
+        )
+        |> Repo.all()
 
+      # 1. Broadcast to chat (for users already inside the conversation)
+      WhatsappCloneWeb.Endpoint.broadcast("chat:#{original.conversation_id}", "new_message", %{
+        "message_id" => reply_msg.id,
+        "conversation_id" => original.conversation_id,
+        "encrypted_body" => reply_msg.encrypted_body,
+        "message_status" => "sent",
+        "reply_to" => message_id,
+        "sender_id" => user_id,
+        "inserted_at" => reply_msg.inserted_at,
+        "message_type" => reply_msg.message_type
+      })
+
+      # 2. Broadcast to each user's personal channel (e.g., for unread count updates)
+      Enum.each(members, fn member_id ->
+        WhatsappCloneWeb.Endpoint.broadcast("user:#{member_id}", "new_message", %{
+          "conversation_id" => reply_msg.conversation_id,
+          "encrypted_body" => reply_msg.encrypted_body,
+          "message_status" => "sent",
+          "sender_id" => user_id,
+          "reply_to" => message_id
+        })
+
+        # Optional:
+        # Trigger FCM if member_id is offline — you'll need to implement presence tracking + FCM logic
+        # PushNotifier.send_if_offline(member_id, ...)
+      end)
+
+      # 3. Echo to sender's own user channel (so UI updates like sent tick show immediately)
+      WhatsappCloneWeb.Endpoint.broadcast("user:#{user_id}", "new_message", %{
+        "conversation_id" => reply_msg.conversation_id,
+        "encrypted_body" => reply_msg.encrypted_body,
+        "message_status" => "sent",
+        "sender_id" => user_id,
+        "reply_to" => message_id
+      })
+
+      json(conn, Repo.preload(reply_msg, [:attachments, :status_entries]))
     else
       {:error, :not_found} ->
         conn |> put_status(:not_found) |> json(%{error: "Original message not found"})
@@ -728,6 +791,7 @@ defmodule WhatsappCloneWeb.MessageController do
         conn |> put_status(:bad_request) |> json(%{error: inspect(reason)})
     end
   end
+
 
   defp fetch_original_message(message_id) do
     case Repo.get(Message, message_id) do
