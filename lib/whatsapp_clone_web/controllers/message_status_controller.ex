@@ -1,4 +1,6 @@
 defmodule WhatsappCloneWeb.MessageStatusController do
+  import Ecto.Query, only: [from: 2]
+
   use WhatsappCloneWeb, :controller
 
   alias WhatsappClone.Messaging
