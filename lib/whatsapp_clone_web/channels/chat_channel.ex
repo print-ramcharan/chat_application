@@ -1329,7 +1329,9 @@ end
 
 
             # 🔥 Add this block here
-            unless id in chat_online_ids or id in user_online_ids do
+            # unless id in chat_online_ids or id in user_online_ids do
+              unless id in chat_online_ids do
+
               fcm_token =
                 Repo.one(
                   from u in WhatsappClone.User,
