@@ -6,6 +6,10 @@ end
 
 if config_env() == :prod do
 
+  config :logger, :console,
+    format: "[$level] $message\n",
+    level: :debug
+
   config :logger, level: :debug
 
   database_url =
