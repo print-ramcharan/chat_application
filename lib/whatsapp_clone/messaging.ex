@@ -534,6 +534,25 @@ defmodule WhatsappClone.Messaging do
     |> Repo.insert()
   end
 
+  # def list_undelivered_messages(conversation_id, user_id) do
+  #   last_read_at =
+  #     from(c in WhatsappClone.ConversationMember,
+  #       where: c.conversation_id == ^conversation_id and c.user_id == ^user_id,
+  #       select: c.last_read_at
+  #     )
+  #     |> Repo.one()
+
+  #   from(m in WhatsappClone.Message,
+  #     where: m.conversation_id == ^conversation_id,
+  #     join: ms in assoc(m, :status_entries),
+  #     on: ms.message_id == m.id and ms.user_id == ^user_id,
+  #     where: ms.status != "delivered",
+  #     where: m.inserted_at > ^last_read_at,
+  #     select: m
+  #   )
+  #   |> Repo.all()
+  # end
+
   def list_undelivered_messages(conversation_id, user_id) do
     last_read_at =
       from(c in WhatsappClone.ConversationMember,
@@ -542,15 +561,22 @@ defmodule WhatsappClone.Messaging do
       )
       |> Repo.one()
 
-    from(m in WhatsappClone.Message,
-      where: m.conversation_id == ^conversation_id,
-      join: ms in assoc(m, :status_entries),
-      on: ms.message_id == m.id and ms.user_id == ^user_id,
-      where: ms.status != "delivered",
-      where: m.inserted_at > ^last_read_at,
-      select: m
-    )
-    |> Repo.all()
+    base_query =
+      from(m in WhatsappClone.Message,
+        where: m.conversation_id == ^conversation_id,
+        join: ms in assoc(m, :status_entries),
+        on: ms.message_id == m.id and ms.user_id == ^user_id,
+        where: ms.status != "delivered"
+      )
+
+    query =
+      if is_nil(last_read_at) do
+        base_query
+      else
+        from(q in base_query, where: q.inserted_at > ^last_read_at)
+      end
+
+    Repo.all(query)
   end
 
 

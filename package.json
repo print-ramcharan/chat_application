@@ -1,7 +1,0 @@
-{
-  "type": "module",
-  "dependencies": {
-    "phoenix": "^1.7.21",
-    "ws": "^8.18.2"
-  }
-}
