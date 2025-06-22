@@ -176,7 +176,19 @@ defmodule WhatsappCloneWeb.AuthController do
     end
   end
 
+  # defp render_changeset_errors(changeset) do
+  #   Ecto.Changeset.traverse_errors(changeset, fn {msg, _opts} -> msg end)
+  # end
   defp render_changeset_errors(changeset) do
-    Ecto.Changeset.traverse_errors(changeset, fn {msg, _opts} -> msg end)
+    changeset
+    |> Ecto.Changeset.traverse_errors(fn {msg, opts} ->
+      Enum.reduce(opts, msg, fn {key, value}, acc ->
+        String.replace(acc, "%{#{key}}", to_string(value))
+      end)
+    end)
+    |> Enum.flat_map(fn {field, messages} ->
+      Enum.map(messages, fn msg -> "#{field}: #{msg}" end)
+    end)
   end
+
 end
