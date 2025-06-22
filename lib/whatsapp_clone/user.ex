@@ -84,9 +84,11 @@ defmodule WhatsappClone.User do
     |> cast(attrs, [:username, :phone_number, :display_name, :avatar_data, :public_key, :password])
     |> validate_required([:username, :phone_number, :display_name, :password])
     |> validate_length(:password, min: 6)
-    |> unique_constraint(:phone_number)
+    |> unique_constraint(:username, name: :users_username_index)
+    |> unique_constraint(:phone_number, name: :users_phone_number_index)
     |> put_hashed_password()
   end
+
 
   defp put_hashed_password(changeset) do
     if password = get_change(changeset, :password) do
