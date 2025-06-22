@@ -154,20 +154,39 @@ defmodule WhatsappCloneWeb.ConversationView do
     }
   end
 
-  defp compute_status_summary(nil), do: "sent"
+  # defp compute_status_summary(nil), do: "sent"
 
-  defp compute_status_summary(entries, current_user_id) do
-    status_priority = ["pending", "sent", "delivered", "read"]
+  # defp compute_status_summary(entries, current_user_id) do
+  #   status_priority = ["pending", "sent", "delivered", "read"]
 
-    other_statuses =
-      entries
-      |> Enum.reject(&(&1.user_id == current_user_id))
-      |> Enum.map(& &1.status)
+  #   other_statuses =
+  #     entries
+  #     |> Enum.reject(&(&1.user_id == current_user_id))
+  #     |> Enum.map(& &1.status)
 
-    Enum.min_by(other_statuses, fn status ->
-      Enum.find_index(status_priority, &(&1 == status)) || length(status_priority)
-    end)
+  #   Enum.min_by(other_statuses, fn status ->
+  #     Enum.find_index(status_priority, &(&1 == status)) || length(status_priority)
+  #   end)
+  # end
+  defp compute_status_summary(nil, _current_user_id), do: "sent"
+
+defp compute_status_summary(entries, current_user_id) do
+  status_priority = ["pending", "sent", "delivered", "read"]
+
+  other_statuses =
+    entries
+    |> Enum.reject(&(&1.user_id == current_user_id))
+    |> Enum.map(& &1.status)
+
+  case other_statuses do
+    [] -> "sent"  # or default to message.status if you have it
+    _ ->
+      Enum.min_by(other_statuses, fn status ->
+        Enum.find_index(status_priority, &(&1 == status)) || length(status_priority)
+      end)
   end
+end
+
 
 
   def render("message.json", %{message: nil}), do: nil
