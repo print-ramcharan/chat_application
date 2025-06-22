@@ -102,6 +102,10 @@ defmodule WhatsappCloneWeb.UserChannel do
     {:noreply, socket}
   end
 
+  def handle_in("heartbeat", _payload, socket) do
+    {:noreply, socket}
+  end
+
   # === Friend Request Accepted ===
   def handle_in("friend_request_accepted", %{
         "original_sender_id" => original_sender_id,
