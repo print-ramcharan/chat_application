@@ -113,6 +113,7 @@
 
 defmodule WhatsappCloneWeb.AuthController do
   use WhatsappCloneWeb, :controller
+
   alias WhatsappClone.Accounts
   alias WhatsappClone.Auth
 
@@ -125,8 +126,7 @@ defmodule WhatsappCloneWeb.AuthController do
         "username" => _,
         "phone_number" => _,
         "display_name" => _,
-        "password" => _,
-        # "avatar_url" => _
+        "password" => _
       } = params) do
     case Accounts.register_user(params) do
       {:ok, user} ->
@@ -150,13 +150,14 @@ defmodule WhatsappCloneWeb.AuthController do
   @doc """
   POST /api/login
   """
-  defp encode_avatar(nil), do: nil
-  defp encode_avatar(data), do: "data:image/png;base64," <> Base.encode64(data)
-
   def login(conn, %{"phone_number" => phone_number, "password" => password}) do
     case Accounts.authenticate_user(phone_number, password) do
       {:ok, user} ->
-        {:ok, token, _claims} = Auth.generate_token(user.id)
+        {:ok, access_token, _claims} =
+          Auth.generate_token(user.id, %{"type" => "access"}, ttl: {15, :minute})
+
+        {:ok, refresh_token, _refresh_claims} =
+          Auth.generate_token(user.id, %{"type" => "refresh"}, ttl: {30, :day})
 
         json(conn, %{
           user: %{
@@ -166,7 +167,8 @@ defmodule WhatsappCloneWeb.AuthController do
             display_name: user.display_name,
             avatar_url: encode_avatar(user.avatar_data)
           },
-          token: token
+          access_token: access_token,
+          refresh_token: refresh_token
         })
 
       {:error, :invalid_credentials} ->
@@ -176,9 +178,58 @@ defmodule WhatsappCloneWeb.AuthController do
     end
   end
 
-  # defp render_changeset_errors(changeset) do
-  #   Ecto.Changeset.traverse_errors(changeset, fn {msg, _opts} -> msg end)
-  # end
+  @doc """
+  POST /api/refresh_token
+  """
+  def refresh(conn, %{"refresh_token" => refresh_token}) do
+    case Auth.verify_token(refresh_token, "refresh") do
+      {:ok, user_id} ->
+        {:ok, new_access_token, _} =
+          Auth.generate_token(user_id, %{"type" => "access"}, [ttl: {15, :minute}])
+
+        json(conn, %{access_token: new_access_token})
+
+      _ ->
+        conn
+        |> put_status(:unauthorized)
+        |> json(%{error: "Invalid or expired token"})
+    end
+  end
+
+  @doc """
+  POST /api/verify_token
+  """
+  def verify(conn, _params) do
+    IO.inspect(get_req_header(conn, "authorization"), label: "Authorization header")
+
+    case get_req_header(conn, "authorization") do
+      ["Bearer " <> token] ->
+        IO.inspect(token, label: "Token to verify")
+        case WhatsappClone.Auth.verify_token(token, "access") do
+          {:ok, _user_id} ->
+            json(conn, %{valid: true})
+
+          _ ->
+            conn
+            |> put_status(:unauthorized)
+            |> json(%{valid: false})
+        end
+
+
+      other ->
+        IO.inspect(other, label: "No Authorization header")
+        conn
+        |> put_status(:unauthorized)
+        |> json(%{error: "Missing Authorization header"})
+    end
+  end
+
+
+
+  # Helpers
+  defp encode_avatar(nil), do: nil
+  defp encode_avatar(data), do: "data:image/png;base64," <> Base.encode64(data)
+
   defp render_changeset_errors(changeset) do
     changeset
     |> Ecto.Changeset.traverse_errors(fn {msg, opts} ->
@@ -190,5 +241,4 @@ defmodule WhatsappCloneWeb.AuthController do
       Enum.map(messages, fn msg -> "#{field}: #{msg}" end)
     end)
   end
-
 end

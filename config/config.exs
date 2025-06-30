@@ -6,7 +6,6 @@
 
 # General application configuration
 import Config
-
 config :whatsapp_clone,
   ecto_repos: [WhatsappClone.Repo],
   generators: [timestamp_type: :utc_datetime]
@@ -23,8 +22,14 @@ config :whatsapp_clone, WhatsappCloneWeb.Endpoint,
   pubsub_server: WhatsappClone.PubSub
 
 
+  secret = System.get_env("JWT_SECRET") || "dev-secret-key"
+
   config :joken,
-  default_signer: System.get_env("JWT_SECRET") || "dev-secret-key"
+  default_signer: secret
+
+
+  # config :joken,
+  # default_signer: System.get_env("JWT_SECRET") || "dev-secret-key"
 
 
 
@@ -47,7 +52,7 @@ config :whatsapp_clone, WhatsappCloneWeb.Endpoint,
   # json: File.read!("config/firebase-service-account.json")
 
 
-  config :goth, json: System.get_env("FIREBASE_CREDENTIALS_JSON")
+  # config :goth, json: System.get_env("FIREBASE_CREDENTIALS_JSON")
 
   # config :goth, json: File.read!("config/firebase-service-account.json")
 

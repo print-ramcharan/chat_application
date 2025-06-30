@@ -78,6 +78,8 @@ defmodule WhatsappCloneWeb.Router do
     # Authentication
     post "/register", AuthController, :register
     post "/login", AuthController, :login
+    post "/refresh_token", AuthController, :refresh
+    post "/verify_token", AuthController, :verify
   end
 
   # Protected API (auth required)
