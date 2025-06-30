@@ -52,7 +52,7 @@ config :whatsapp_clone, WhatsappCloneWeb.Endpoint,
   # json: File.read!("config/firebase-service-account.json")
 
 
-  # config :goth, json: System.get_env("FIREBASE_CREDENTIALS_JSON")
+  config :goth, json: System.get_env("FIREBASE_CREDENTIALS_JSON")
 
   # config :goth, json: File.read!("config/firebase-service-account.json")
 
