@@ -306,21 +306,127 @@ defmodule WhatsappClone.Messaging do
   #   |> Repo.all()
   # end
 
-  def list_messages(conversation_id) do
-    subquery =
-      from m in Message,
-        where: m.conversation_id == ^conversation_id,
-        order_by: [desc: m.inserted_at],
-        limit: 30,
-        select: m.id
+  # def list_messages(conversation_id) do
+  #   subquery =
+  #     from m in Message,
+  #       where: m.conversation_id == ^conversation_id,
+  #       order_by: [desc: m.inserted_at],
+  #       limit: 30,
+  #       select: m.id
 
+  #   from(m in Message,
+  #     where: m.id in subquery(subquery),
+  #     order_by: [asc: m.inserted_at],
+  #     preload: [:attachments, :sender, [status_entries: :user]]
+  #   )
+  #   |> Repo.all()
+  # end
+  # def list_messages(conversation_id) do
+  #   subquery =
+  #     from m in Message,
+  #       where: m.conversation_id == ^conversation_id,
+  #       order_by: [desc: m.inserted_at],
+  #       limit: 30,
+  #       select: m.id
+
+  #   from(m in Message,
+  #     where: m.id in subquery(subquery),
+  #     order_by: [asc: m.inserted_at],
+  #     preload: [
+  #       :attachments,
+  #       :sender,
+  #       [status_entries: :user],
+  #       reply_to: [:sender]  # 👈 preload reply_to and its sender
+  #     ]
+  #   )
+  #   |> Repo.all()
+  # end
+  # def list_messages(conversation_id) do
+  #   subquery =
+  #     from m in Message,
+  #       where: m.conversation_id == ^conversation_id,
+  #       order_by: [desc: m.inserted_at],
+  #       limit: 30,
+  #       select: m.id
+
+  #   from(m in Message,
+  #     where: m.id in subquery(subquery),
+  #     order_by: [asc: m.inserted_at],
+  #     preload: [
+  #       :attachments,
+  #       :sender,
+  #       [status_entries: :user],
+  #       [reply_to: [:sender, :attachments]]  # ✅ full reply metadata
+  #     ]
+  #   )
+  #   |> Repo.all()
+  # end
+  def list_messages(conversation_id) do
     from(m in Message,
-      where: m.id in subquery(subquery),
+      where: m.conversation_id == ^conversation_id,
       order_by: [asc: m.inserted_at],
-      preload: [:attachments, :sender, [status_entries: :user]]
+      preload: [
+        :attachments,
+        :sender,
+        status_entries: [:user],
+        reply_to: [
+          :attachments,
+          :sender,
+          reply_to: [
+            :attachments,
+            :sender
+          ]
+        ]
+      ]
     )
-    |> Repo.all()
+    |> WhatsappClone.Repo.all()
   end
+
+
+
+
+  # def get_last_message(conversation_id) do
+  #   from(m in Message,
+  #     where: m.conversation_id == ^conversation_id,
+  #     order_by: [desc: m.inserted_at],
+  #     limit: 1,
+  #     preload: [:attachments, :status_entries]
+  #   )
+  #   |> Repo.one()
+  # end
+  # def get_last_message(conversation_id) do
+  #   from(m in WhatsappClone.Message,
+  #     where: m.conversation_id == ^conversation_id,
+  #     order_by: [desc: m.inserted_at],
+  #     limit: 1,
+  #     preload: [:attachments, :status_entries, :reply_to]
+  #   )
+  #   |> WhatsappClone.Repo.one()
+  # end
+
+  def get_last_message(conversation_id) do
+    from(m in Message,
+      where: m.conversation_id == ^conversation_id,
+      order_by: [desc: m.inserted_at],
+      limit: 1
+    )
+    |> WhatsappClone.Repo.one()
+    |> WhatsappClone.Repo.preload([
+      :attachments,
+      :sender,
+      :status_entries,
+      reply_to: [
+        :attachments,
+        :sender,
+        reply_to: [
+          :attachments,
+          :sender
+        ]
+      ]
+    ])
+  end
+
+
 
 
 

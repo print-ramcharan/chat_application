@@ -191,7 +191,24 @@ defmodule WhatsappCloneWeb.ConversationView do
 
   def render("message.json", %{message: nil}), do: nil
 
+  # def render("message.json", %{message: message}) do
+  #   status_entries = message.status_entries || []
+  #   current_user_id = message.sender_id
+
+  #   %{
+  #     id: message.id,
+  #     sender_id: message.sender_id,
+  #     conversation_id: Map.get(message, :conversation_id),
+  #     encrypted_body: message.encrypted_body,
+  #     message_type: message.message_type,
+  #     inserted_at: message.inserted_at,
+  #     message_status: compute_status_summary(status_entries, current_user_id),
+  #     attachment_type: get_first_attachment_type(message)
+  #   }
+  # end
   def render("message.json", %{message: message}) do
+    IO.inspect(message.attachments, label: ">>> Attachments List")
+
     status_entries = message.status_entries || []
     current_user_id = message.sender_id
 
@@ -202,9 +219,33 @@ defmodule WhatsappCloneWeb.ConversationView do
       encrypted_body: message.encrypted_body,
       message_type: message.message_type,
       inserted_at: message.inserted_at,
-      message_status: compute_status_summary(status_entries, current_user_id)
+      message_status: compute_status_summary(status_entries, current_user_id),
+      attachment_type: get_first_attachment_type(message),
+      attachments: Enum.map(message.attachments || [], fn att ->
+        %{
+          id: att.id,
+          file_url: Base.encode64(att.file_data || <<>>),
+          mime_type: att.mime_type
+        }
+      end)
     }
   end
+
+  defp get_first_attachment_type(message) do
+    case Map.get(message, :attachments) do
+      [%{mime_type: mime} | _] when is_binary(mime) ->
+        cond do
+          String.starts_with?(mime, "image/") -> "image"
+          String.starts_with?(mime, "video/") -> "video"
+          String.starts_with?(mime, "audio/") -> "audio"
+          true -> "file"
+        end
+
+      _ -> nil
+    end
+  end
+
+
 
   # defp compute_status_summary(entries) do
 

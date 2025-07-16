@@ -286,22 +286,47 @@ end
   #   render(conn, WhatsappCloneWeb.ConversationView, "index.json", conversations: conversations)
   # end
 
+  # def list_for_current_user(conn, _params) do
+  #   user_id = conn.assigns[:user_id]
+
+  #   conversations =
+  #     Conversations.list_user_conversations(user_id)
+  #     |> WhatsappClone.Repo.preload(:creator)
+
+  #   # Add unread count to each conversation
+  #   conversations_with_counts =
+  #     Enum.map(conversations, fn convo ->
+  #       count = WhatsappClone.Messaging.unread_count(convo.id, user_id)
+  #       Map.put(convo, :unread_count, count)
+  #     end)
+
+  #   render(conn, WhatsappCloneWeb.ConversationView, "index.json", conversations: conversations_with_counts)
+  # end
+
   def list_for_current_user(conn, _params) do
     user_id = conn.assigns[:user_id]
 
     conversations =
       Conversations.list_user_conversations(user_id)
-      |> WhatsappClone.Repo.preload(:creator)
+      |> WhatsappClone.Repo.preload([:creator, :conversation_members])
 
-    # Add unread count to each conversation
-    conversations_with_counts =
+    conversations_with_data =
       Enum.map(conversations, fn convo ->
-        count = WhatsappClone.Messaging.unread_count(convo.id, user_id)
-        Map.put(convo, :unread_count, count)
+        last_message =
+          WhatsappClone.Messaging.get_last_message(convo.id) # This must preload attachments & status_entries inside it
+
+        # Debug log if needed
+        IO.inspect(last_message, label: "last_message with attachments")
+
+        convo
+        |> Map.put(:last_message, last_message)
+        |> Map.put(:unread_count, WhatsappClone.Messaging.unread_count(convo.id, user_id))
       end)
 
-    render(conn, WhatsappCloneWeb.ConversationView, "index.json", conversations: conversations_with_counts)
+    render(conn, WhatsappCloneWeb.ConversationView, "index.json", conversations: conversations_with_data)
   end
+
+
 
 
 

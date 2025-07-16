@@ -14,7 +14,9 @@ defmodule WhatsappCloneWeb.MessageView do
       inserted_at: msg.inserted_at,
       attachments: render_attachments(msg.attachments || []),
       statuses: render_statuses(msg.status_entries || []),
+      client_ref: msg.client_ref,
 
+      reply_to: render_reply_to(msg.reply_to),
       sender_display_name: msg.sender && msg.sender.display_name,
       # sender_avatar_data: msg.sender && msg.sender.avatar_data
       sender_avatar_data:
@@ -23,6 +25,19 @@ defmodule WhatsappCloneWeb.MessageView do
       else
         nil
       end
+    }
+  end
+
+  defp render_reply_to(nil), do: nil
+
+  defp render_reply_to(message) do
+    %{
+      id: message.id,
+      sender_id: message.sender_id,
+      sender_display_name: message.sender && message.sender.display_name,
+      encrypted_body: message.encrypted_body,
+      message_type: message.message_type,
+      attachments: render_attachments(message.attachments || [])
     }
   end
 
@@ -35,7 +50,7 @@ defmodule WhatsappCloneWeb.MessageView do
     Enum.map(attachments, fn a ->
       %{
         id: a.id,
-        file_url: a.file_url,
+        file_data: (a.file_data && Base.encode64(a.file_data)) || nil,
         mime_type: a.mime_type,
         message_id: a.message_id,
         inserted_at: a.inserted_at,
@@ -43,6 +58,7 @@ defmodule WhatsappCloneWeb.MessageView do
       }
     end)
   end
+
 
 
   # defp render_statuses(statuses) do
