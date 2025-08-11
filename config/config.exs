@@ -45,16 +45,16 @@ config :whatsapp_clone, WhatsappCloneWeb.Endpoint,
   # config :goth, WhatsappClone.Goth,
   # json: System.get_env("FIREBASE_CREDENTIALS_JSON")
 
-  config :goth, WhatsappClone.Goth,
-  json: System.get_env("FIREBASE_CREDENTIALS_JSON") || File.read!("config/firebase-service-account.json")
+  # config :goth, WhatsappClone.Goth,
+  # json: System.get_env("FIREBASE_CREDENTIALS_JSON") || File.read!("config/firebase-service-account.json")
   # config :goth,
   # name: WhatsappClone.Goth,
   # json: File.read!("config/firebase-service-account.json")
 
 
-  #  config :goth, json: System.get_env("FIREBASE_CREDENTIALS_JSON")
+   config :goth, json: System.get_env("FIREBASE_CREDENTIALS_JSON")
 
-  config :goth, json: File.read!("config/firebase-service-account.json")
+  # config :goth,  json: File.read!("config/firebase-service-account.json")
 
 # Configures the mailer
 #
