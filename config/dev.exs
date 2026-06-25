@@ -1,14 +1,25 @@
 import Config
 
 # Configure your database
-config :whatsapp_clone, WhatsappClone.Repo,
-  username: "ram",
-  password: "1234567890",
-  hostname: "localhost",
-  database: "whatsapp_clone_dev",
-  stacktrace: true,
-  show_sensitive_data_on_connection_error: true,
-  pool_size: 10
+if database_url = System.get_env("DATABASE_URL") do
+  config :whatsapp_clone, WhatsappClone.Repo,
+    url: database_url,
+    ssl: true,
+    ssl_opts: [verify: :verify_none],
+    stacktrace: true,
+    show_sensitive_data_on_connection_error: true,
+    pool_size: 10
+else
+  config :whatsapp_clone, WhatsappClone.Repo,
+    username: "ram",
+    password: "1234567890",
+    hostname: "localhost",
+    database: "whatsapp_clone_dev",
+    stacktrace: true,
+    show_sensitive_data_on_connection_error: true,
+    pool_size: 10
+end
+
 
 
 # For development, we disable any cache and enable
